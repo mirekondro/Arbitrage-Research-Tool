@@ -42,18 +42,42 @@ _CATEGORY_KEYWORDS: dict[str, set[str]] = {
     "cat-politics": {
         "president", "trump", "biden", "harris", "election", "vote", "senator",
         "congress", "democrat", "republican", "white house", "tariff",
-        "nato", "supreme court", "legislation", "bill signed", "governor",
+        "supreme court", "legislation", "bill signed", "governor",
         "pardon", "impeach", "cabinet", "executive order",
     },
     "cat-crypto": {
         "bitcoin", "btc", "ethereum", "eth", "crypto", "solana", "sol",
         "doge", "dogecoin", "blockchain", "token", "defi", "nft",
         "xrp", "ripple", "cardano", "ada", "polkadot", "binance", "coinbase",
+        "100k", "200k", "50k",  # BTC price targets
     },
     "cat-finance": {
-        "gdp", "recession", "federal reserve", "interest rate", "inflation",
-        "cpi", "unemployment", "economy", "stock market", "s&p", "nasdaq",
-        "rate hike", "rate cut", "treasury", "debt ceiling", "jobs report",
+        # Macro / central bank
+        "gdp", "recession", "federal reserve", "fed", "fomc", "interest rate",
+        "rate hike", "rate cut", "rate decision", "basis point",
+        # Inflation
+        "inflation", "cpi", "pce", "consumer price",
+        # Labour / growth
+        "unemployment", "nonfarm", "jobs report", "payroll",
+        "economy", "economic growth", "economic contraction",
+        # Markets
+        "stock market", "s&p", "sp500", "nasdaq", "dow jones", "earnings",
+        "ipo", "treasury", "yield curve", "bond yield",
+        # Fiscal
+        "debt ceiling", "budget deficit", "government shutdown",
+        "tariff", "trade deficit", "sanctions",
+        # Housing
+        "mortgage rate", "housing market", "home price",
+    },
+    "cat-world": {
+        # Geopolitics
+        "greenland", "nato", "ukraine", "russia", "china", "taiwan",
+        "border", "immigration", "deportation", "ceasefire", "cease fire",
+        "nuclear", "treaty", "european union", "denmark",
+        "israel", "iran", "middle east", "gaza", "g7", "g20",
+        "sovereignty", "annexation", "invasion", "occupation",
+        "prime minister", "chancellor", "trudeau", "macron", "scholz",
+        "modi", "xi jinping", "kim jong", "zelensky", "putin",
     },
 }
 
@@ -62,6 +86,7 @@ CATEGORIES = [
     ("All",          "cat-all"),
     ("⚽ Sports",    "cat-sports"),
     ("🏛 Politics",  "cat-politics"),
+    ("🌍 World",     "cat-world"),
     ("💰 Crypto",    "cat-crypto"),
     ("📈 Finance",   "cat-finance"),
 ]
@@ -106,6 +131,41 @@ def _liq_str(opp: ArbitrageOpportunity) -> str:
     if total_liq >= 1_000:
         return f"${total_liq/1_000:.0f}K"
     return f"${total_liq:.0f}"
+
+
+def _close_str(opp: ArbitrageOpportunity) -> str:
+    """Return Rich markup for time-to-close with urgency coloring."""
+    ct: Optional[datetime] = None
+    for mkt in (opp.market_a, opp.market_b):
+        if mkt.close_time:
+            ct = mkt.close_time
+            break
+    if ct is None:
+        return "[dim]─[/]"
+    ct_naive = ct.replace(tzinfo=None) if ct.tzinfo else ct
+    secs = (ct_naive - datetime.now()).total_seconds()
+    if secs <= 0:
+        return "[dim]exp[/]"
+    days = int(secs / 86400)
+    hours = int((secs % 86400) / 3600)
+    if secs < 3600:
+        mins = max(1, int(secs / 60))
+        return f"[bold red]{mins}m[/]"
+    if days == 0:
+        return f"[bold red]{hours}h[/]"
+    if days <= 3:
+        return f"[bold red]{days}d[/]"
+    if days <= 14:
+        return f"[yellow]{days}d[/]"
+    if days <= 90:
+        return f"[dim]{days}d[/]"
+    return f"[dim]{ct_naive.strftime('%b %d')}[/]"
+
+
+def _profit_bar(pct: float, cap: float = 30.0) -> str:
+    """Return a 5-block bar proportional to profit%."""
+    filled = min(5, round(pct / cap * 5))
+    return "█" * filled + "░" * (5 - filled)
 
 
 def _is_real_money(opp: ArbitrageOpportunity) -> bool:
@@ -224,9 +284,9 @@ class ControlBar(Horizontal):
         yield Label("  Vol$:")
         yield Input(value="0", id="min-vol")
         yield Label("  Sim%:")
-        yield Input(value="72", id="sim-thresh")
+        yield Input(value="70", id="sim-thresh")
         yield Label("  Real$:", classes="real-label")
-        yield Switch(value=False, id="sw-realonly", animate=False)
+        yield Switch(value=True, id="sw-realonly", animate=False)
         yield Label("  Sort: [bold cyan]Profit%[/]  [dim]s[/]", id="sort-lbl")
         yield Button("⟳ Refresh", id="refresh-btn", variant="primary")
         yield Button("↓ CSV", id="export-btn")
@@ -247,9 +307,9 @@ class StatusBar(Static):
 class DetailPanel(Static):
     DEFAULT_CSS = """
     DetailPanel {
-        height: 7;
+        height: 10;
         background: #0d1117;
-        border-top: solid #30363d;
+        border-top: solid #21262d;
         padding: 0 1;
         display: none;
     }
@@ -270,10 +330,13 @@ class ArbTab(Vertical):
     _all_markets:    dict  = {}
     _next_refresh:   float = 0.0
     _auto_on:        bool  = True
-    _real_only:      bool  = False
+    _real_only:      bool  = True
     _enabled_pforms: set   = set(PLATFORM_CFG.keys())
     _prev_real_keys: set   = set()   # track previously-seen real-money arb pairs
     _prev_profit_map: dict = {}      # profit_pct from the PREVIOUS scan (convergence Δ)
+    _prev_opp_keys:  set   = set()   # all opp keys from previous scan (for NEW badge)
+    _new_opp_keys:   set   = set()   # keys that are NEW this scan (shown in table)
+    _is_first_scan:  bool  = True    # suppress NEW badges on the very first load
     _sort_mode:      str   = "profit"  # "profit" | "liq" | "close"
     _category:       str   = "cat-all"  # active category tab
 
@@ -295,6 +358,13 @@ class ArbTab(Vertical):
             "NO on",  "NO $",
             "Profit%", "Δ", "Liq", "Match%", "Closes",
         )
+        # Sync state from Switch widgets after the whole widget tree is mounted.
+        # Textual may fire Switch.Changed events during compose with intermediate
+        # values; reading the final widget value here is the authoritative source.
+        try:
+            self._real_only = self.query_one("#sw-realonly", Switch).value
+        except Exception:
+            self._real_only = True
         self.set_interval(1, self._tick)
         self.fetch_markets()
 
@@ -423,45 +493,64 @@ class ArbTab(Vertical):
     async def fetch_markets(self) -> None:
         from src.apis import polymarket, kalshi, manifold, predictit
 
-        self._set_status("Fetching markets from all platforms…")
         t0 = time.time()
 
+        # Show ⟳ spinner on every platform label immediately
+        for pid, cfg in PLATFORM_CFG.items():
+            try:
+                self.query_one(f"#lbl-{pid}", Label).update(
+                    f"[bold {cfg['color']}]{cfg['short']}[/] [dim]⟳[/]"
+                )
+            except Exception:
+                pass
+
+        self._set_status(
+            "  ".join(
+                f"[bold {cfg['color']}]{cfg['short']}[/] [dim]⟳[/]"
+                for cfg in PLATFORM_CFG.values()
+            ) + "  [dim]fetching…[/]"
+        )
+
+        async def _fetch_one(name: str, coro) -> tuple[str, list]:
+            cfg = PLATFORM_CFG[name]
+            color, short = cfg["color"], cfg["short"]
+            try:
+                result = await coro
+                n = len(result)
+                try:
+                    self.query_one(f"#lbl-{name}", Label).update(
+                        f"[bold {color}]{short}[/] [dim]{n} ✓[/]"
+                    )
+                except Exception:
+                    pass
+                return name, result
+            except Exception:
+                try:
+                    self.query_one(f"#lbl-{name}", Label).update(
+                        f"[bold {color}]{short}[/] [red]ERR[/]"
+                    )
+                except Exception:
+                    pass
+                return name, []
+
         try:
-            results = await asyncio.gather(
-                polymarket.fetch_markets(400),
-                kalshi.fetch_markets(400),
-                manifold.fetch_markets(200),
-                predictit.fetch_markets(200),
-                return_exceptions=True,
+            pairs = await asyncio.gather(
+                _fetch_one("polymarket", polymarket.fetch_markets(400)),
+                _fetch_one("kalshi",     kalshi.fetch_markets(400)),
+                _fetch_one("manifold",   manifold.fetch_markets(200)),
+                _fetch_one("predictit",  predictit.fetch_markets(200)),
             )
 
-            platform_names = ["polymarket", "kalshi", "manifold", "predictit"]
             counts = []
             self._all_markets = {}
-            for name, result in zip(platform_names, results):
+            for name, result in pairs:
+                self._all_markets[name] = result
                 cfg = PLATFORM_CFG[name]
-                color = cfg["color"]
-                short = cfg["short"]
-                if isinstance(result, list):
-                    self._all_markets[name] = result
-                    n = len(result)
-                    counts.append(f"[bold]{n}[/] {name[:4].upper()}")
-                    # Update platform badge label with live market count
-                    try:
-                        self.query_one(f"#lbl-{name}", Label).update(
-                            f"[bold {color}]{short}[/] [dim]{n}[/]"
-                        )
-                    except Exception:
-                        pass
+                n = len(result)
+                if n:
+                    counts.append(f"[bold]{n}[/] {cfg['short']}")
                 else:
-                    self._all_markets[name] = []
-                    counts.append(f"[red]ERR[/] {short}")
-                    try:
-                        self.query_one(f"#lbl-{name}", Label).update(
-                            f"[bold {color}]{short}[/] [red]ERR[/]"
-                        )
-                    except Exception:
-                        pass
+                    counts.append(f"[red]ERR[/] {cfg['short']}")
 
             elapsed = time.time() - t0
             self._rescan(status_prefix=f"[dim]{elapsed:.1f}s[/]  {'  '.join(counts)}  →  ")
@@ -505,6 +594,15 @@ class ArbTab(Vertical):
             old_map[_opp_key(opp)] = opp.profit_pct
         self._prev_profit_map = old_map
 
+        # Track which opportunities are genuinely NEW this scan
+        cur_keys = {_opp_key(o) for o in opps}
+        if self._is_first_scan:
+            self._new_opp_keys = set()
+            self._is_first_scan = False
+        else:
+            self._new_opp_keys = cur_keys - self._prev_opp_keys
+        self._prev_opp_keys = cur_keys
+
         # Update status BEFORE setting reactive (so it shows during the render)
         now = datetime.now().strftime("%H:%M:%S")
         real_opps = [o for o in opps if _is_real_money(o)]
@@ -515,10 +613,15 @@ class ArbTab(Vertical):
             if real > 0 else ""
         )
         sort_lbl = self._SORT_LABELS.get(self._sort_mode, "Profit%")
+        real_filter_note = (
+            f"  [bold green]Real$✓[/] [dim]{real} real / {play} play hidden[/]"
+            if self._real_only else
+            f"  [dim]{real} real · {play} play[/]"
+        )
         self._set_status(
             f"{status_prefix}"
-            f"[bold white]{len(opps)}[/] opps  "
-            f"[dim]{play} play[/]"
+            f"[bold white]{len(opps)}[/] total"
+            f"{real_filter_note}"
             f"{real_alert}"
             f"  [dim]│  {now}  │  s={sort_lbl}  e=edge  o=urls  n=news  x=csv[/]"
         )
@@ -541,8 +644,11 @@ class ArbTab(Vertical):
                 )
         self._prev_real_keys = cur_real_keys
 
-        # Setting reactive triggers watch_opportunities → _apply_filter
+        # Set reactive so downstream reactive watchers stay consistent,
+        # then call _apply_filter directly — the worker context means the
+        # watcher may be scheduled for a later event-loop tick, too late.
         self.opportunities = opps
+        self._apply_filter()
 
     # ── Filter ────────────────────────────────────────────────────────────────
 
@@ -552,9 +658,15 @@ class ArbTab(Vertical):
         except Exception:
             kw = ""
 
+        # Use the backing field as the single source of truth.
+        # The backing field is set in on_mount (from the Switch widget after full
+        # DOM mount) and in on_switch_changed (when the user toggles). It is
+        # intentionally NEVER written here to avoid worker-context query races.
+        real_only = self._real_only
+
         opps = list(self.opportunities)
 
-        if self._real_only:
+        if real_only:
             opps = [o for o in opps if _is_real_money(o)]
 
         if kw:
@@ -564,6 +676,13 @@ class ArbTab(Vertical):
                 or kw in o.buy_yes_on
                 or kw in o.buy_no_on
             ]
+
+        # Category counts are computed here — BEFORE the category filter — so
+        # each button shows how many opportunities exist in that category given
+        # the current Real$ + keyword filters (but not yet the category selection).
+        # This means the counts accurately reflect what clicking each category
+        # button would show, rather than confusingly counting hidden play-money rows.
+        self._update_category_counts(opps)
 
         # Category filter (cat-all = no filter)
         if self._category != "cat-all":
@@ -582,10 +701,6 @@ class ArbTab(Vertical):
                     return datetime.max
                 return ct.replace(tzinfo=None) if ct.tzinfo else ct
             opps.sort(key=_close_key)
-        # profit sort: already sorted by scan_opportunities()
-
-        # Update category button labels with counts from ALL opps (unfiltered)
-        self._update_category_counts(self.opportunities)
 
         self._filtered_opps = opps
         self._populate_table(self._filtered_opps)
@@ -629,37 +744,54 @@ class ArbTab(Vertical):
         table.clear()
 
         if not opps:
-            # Empty-state: single descriptive row so the table never looks broken
-            table.add_row(
-                "", "", "[dim italic]No opportunities match current filters — "
-                "try lowering Min% or Sim%[/]",
-                "", "", "", "", "", "", "", "", "",
-            )
+            # Smart empty-state: explain WHY and what to do about it
+            total = len(self.opportunities)
+            if total == 0:
+                hint = "[dim italic]Fetching markets… or no cross-platform arb found[/]"
+            else:
+                play_count = sum(1 for o in self.opportunities if not _is_real_money(o))
+                real_count = total - play_count
+                if self._real_only and play_count > 0 and real_count == 0:
+                    hint = (
+                        f"[dim italic]Real$ filter ON — all {play_count} opportunities are "
+                        f"play-money (Manifold). Toggle Real$ off to see them.[/]"
+                    )
+                elif self._real_only and play_count > 0:
+                    hint = (
+                        f"[dim italic]Real$ filter ON — {real_count} real-money opps in other "
+                        f"categories. Click All, or turn off Real$.[/]"
+                    )
+                else:
+                    hint = (
+                        "[dim italic]No opportunities match current filters — "
+                        "try lowering Min%, Sim%, or switching to All categories[/]"
+                    )
+            table.add_row("", "", hint, "", "", "", "", "", "", "", "", "")
             return
 
         for i, opp in enumerate(opps, 1):
             real = _is_real_money(opp)
+            is_new = _opp_key(opp) in self._new_opp_keys
             title = opp.matched_title
             if len(title) > 44:
                 title = title[:43] + "…"
 
-            # Real-money rows get a gold star prefix for instant visual pop
-            if real:
+            # Title prefix: star for real-money, ✦ badge for genuinely NEW
+            if real and is_new:
+                title_cell = f"[bold green]★[/] [bold magenta]NEW[/] {title}"
+            elif real:
                 title_cell = f"[bold green]★[/] {title}"
+            elif is_new:
+                title_cell = f"[bold magenta]✦[/] {title}"
             else:
                 title_cell = title
 
-            closes = ""
-            for mkt in (opp.market_a, opp.market_b):
-                if mkt.close_time:
-                    closes = mkt.close_time.strftime("%b %d")
-                    break
-
             badge, _ = _tier(opp.profit_pct)
+            bar = _profit_bar(opp.profit_pct)
             profit_markup = (
-                f"[bold green]+{opp.profit_pct:.1f}%[/]"
+                f"[bold green]+{opp.profit_pct:.1f}%[/] [dim]{bar}[/]"
                 if real
-                else f"[dim green]+{opp.profit_pct:.1f}%[/] [dim](play)[/]"
+                else f"[dim]+{opp.profit_pct:.1f}%[/] [dim]{bar}(p)[/]"
             )
 
             table.add_row(
@@ -674,7 +806,7 @@ class ArbTab(Vertical):
                 self._delta_arrow(opp),
                 _liq_str(opp),
                 f"{opp.similarity:.0f}%",
-                closes,
+                _close_str(opp),
             )
 
     # ── Actions ───────────────────────────────────────────────────────────────
@@ -743,7 +875,7 @@ class ArbTab(Vertical):
     def _format_detail(self, opp: ArbitrageOpportunity) -> str:
         a, b = opp.market_a, opp.market_b
         spread_pct = abs(a.yes_price - b.yes_price) * 100
-        real_tag = "[green]REAL MONEY[/]" if _is_real_money(opp) else "[dim]PLAY MONEY[/]"
+        real_tag = "[bold green]REAL MONEY[/]" if _is_real_money(opp) else "[dim]PLAY MONEY[/]"
 
         # Category label for detail view
         cat_key = _detect_category(opp.matched_title)
@@ -754,24 +886,55 @@ class ArbTab(Vertical):
         if prev is not None and abs(opp.profit_pct - prev) >= 0.05:
             diff = opp.profit_pct - prev
             delta_note = (
-                f"  [bold green]↑ +{diff:.2f}%[/] vs prev scan"
+                f"  [bold green]↑ +{diff:.2f}%[/] vs prev"
                 if diff > 0
-                else f"  [bold red]↓ {diff:.2f}%[/] vs prev scan"
+                else f"  [bold red]↓ {diff:.2f}%[/] vs prev"
             )
         else:
             delta_note = ""
 
         cat_part = f"  [dim]{cat_label}[/]" if cat_label else ""
+        close_part = f"  Closes: {_close_str(opp)}" if (a.close_time or b.close_time) else ""
+
+        # Bet sizing: split stake proportionally so both legs pay out equally
+        total_raw = opp.yes_price + opp.no_price  # pre-fee combined cost
+        bet_lines = []
+        if total_raw > 0 and total_raw < 1.0:
+            for stake in (100, 1_000, 10_000):
+                yes_leg = stake * opp.yes_price / total_raw
+                no_leg  = stake * opp.no_price  / total_raw
+                profit  = stake * opp.profit_pct / 100
+                bet_lines.append(
+                    f"  💰 ${stake:,} → "
+                    f"YES ${yes_leg:,.0f} on [bold]{opp.buy_yes_on}[/]  "
+                    f"+ NO ${no_leg:,.0f} on [bold]{opp.buy_no_on}[/]  "
+                    f"→ [bold green]+${profit:,.2f}[/] guaranteed"
+                )
+        # Max deployable (limited by smaller liquidity leg)
+        liq_yes = a.liquidity if a.platform == opp.buy_yes_on else b.liquidity
+        liq_no  = b.liquidity if b.platform == opp.buy_no_on  else a.liquidity
+        min_liq = min(liq_yes or 0, liq_no or 0)
+        if min_liq > 0:
+            limiting_plat = opp.buy_yes_on if (liq_yes or 0) <= (liq_no or 0) else opp.buy_no_on
+            max_profit = min_liq * opp.profit_pct / 100
+            bet_lines.append(
+                f"  📊 Max deployable: [bold]${min_liq:,.0f}[/] "
+                f"→ [bold green]+${max_profit:,.0f}[/] "
+                f"[dim](limited by {limiting_plat} liq)[/]"
+            )
+
+        bet_section = "\n".join(bet_lines) if bet_lines else ""
 
         return (
-            f"[bold]{opp.matched_title[:90]}[/]  {real_tag}{cat_part}\n"
+            f"[bold]{opp.matched_title[:90]}[/]  {real_tag}{cat_part}{close_part}\n"
             f"  {_platform_badge(a.platform)}  YES={a.yes_price:.4f}  NO={a.no_price:.4f}"
-            f"  Vol=${a.volume:,.0f}  Liq=${a.liquidity:,.0f}  [dim]{a.url[:55]}[/]\n"
+            f"  Vol=${a.volume:,.0f}  Liq=${a.liquidity:,.0f}  [dim]{a.url[:50]}[/]\n"
             f"  {_platform_badge(b.platform)}  YES={b.yes_price:.4f}  NO={b.no_price:.4f}"
-            f"  Vol=${b.volume:,.0f}  Liq=${b.liquidity:,.0f}  [dim]{b.url[:55]}[/]\n"
+            f"  Vol=${b.volume:,.0f}  Liq=${b.liquidity:,.0f}  [dim]{b.url[:50]}[/]\n"
             f"  Spread: [yellow]{spread_pct:.1f}%[/]  │  "
             f"BUY YES on [bold]{opp.buy_yes_on}[/] @ {opp.yes_price:.4f}  "
             f"+  BUY NO on [bold]{opp.buy_no_on}[/] @ {opp.no_price:.4f}  "
             f"→  [bold green]+{opp.profit_pct:.2f}%[/]  (match={opp.similarity:.0f}%){delta_note}\n"
-            f"  [dim]e=Edge  o=URLs  n=News  x=CSV  s=Sort cycle  ↑↓=Navigate[/]"
+            + (f"{bet_section}\n" if bet_section else "")
+            + f"  [dim]e=Edge  o=URLs  n=News  x=CSV  s=Sort  ↑↓=Navigate[/]"
         )

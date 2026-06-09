@@ -30,9 +30,10 @@ HELP_TEXT = """\
   Auto-refresh               Toggle 60-second auto-refresh
 
 [bold]── Category quick-filter (second bar) ─────────────────[/]
-  All / ⚽ Sports / 🏛 Politics / 💰 Crypto / 📈 Finance
+  All / ⚽ Sports / 🏛 Politics / 🌍 World / 💰 Crypto / 📈 Finance
   Click a category to filter the table; count shown per button
   Stacks with the keyword filter and Real$ toggle
+  🌍 World = geopolitics (NATO, Greenland, Ukraine, Taiwan, etc.)
 
 [bold]── Filters (third bar) ─────────────────────────────────[/]
   Min%     Minimum guaranteed profit % (default 0.5)
