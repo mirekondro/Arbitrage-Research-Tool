@@ -7,8 +7,12 @@ from src.core.matcher import find_matches
 FEES: dict[str, float] = {
     "polymarket": 0.02,
     "kalshi":     0.07,
-    "manifold":   0.00,  # play money
+    "manifold":   0.00,   # play money
+    "predictit":  0.10,   # 10% fee on profits (US-regulated)
 }
+
+# Platforms where prices are real-money tradeable
+REAL_MONEY_PLATFORMS = {"polymarket", "kalshi", "predictit"}
 
 MIN_PROFIT_PCT = 0.5  # surface opportunities with >0.5% guaranteed edge
 
@@ -81,4 +85,11 @@ def scan_opportunities(
                     opportunities.append(opp)
 
     opportunities.sort(key=lambda o: o.profit_pct, reverse=True)
-    return opportunities
+
+    # Deduplicate: for the same (platform_pair, matched_title) keep only the best opportunity
+    seen: dict[str, ArbitrageOpportunity] = {}
+    for opp in opportunities:
+        key = f"{opp.buy_yes_on}+{opp.buy_no_on}:{opp.matched_title[:60]}"
+        if key not in seen:
+            seen[key] = opp
+    return list(seen.values())

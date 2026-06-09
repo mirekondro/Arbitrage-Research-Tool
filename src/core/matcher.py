@@ -18,6 +18,14 @@ def _normalize(title: str) -> str:
     return " ".join(title.split())
 
 
+def _jaccard(norm_a: str, norm_b: str) -> float:
+    """Token-level Jaccard similarity: |A∩B| / |A∪B|."""
+    sa = set(norm_a.split())
+    sb = set(norm_b.split())
+    union = sa | sb
+    return len(sa & sb) / len(union) if union else 0.0
+
+
 def _dates_close(a: Market, b: Market) -> bool:
     if a.close_time is None or b.close_time is None:
         return True
@@ -46,6 +54,12 @@ def find_matches(
         results = process.extract(norm_a, b_norms, scorer=fuzz.token_set_ratio, limit=5)
         for _match_str, score, idx in results:
             if score < threshold:
+                continue
+            norm_b = b_norms[idx]
+            # Guard against same-template/different-entity false positives
+            # (e.g. "Will Trump pardon Musk" vs "Will Trump pardon Maxwell").
+            # Require ≥40% token-level Jaccard overlap so we share the key noun.
+            if _jaccard(norm_a, norm_b) < 0.40:
                 continue
             mkt_b = markets_b[idx]
             if not _dates_close(mkt_a, mkt_b):
