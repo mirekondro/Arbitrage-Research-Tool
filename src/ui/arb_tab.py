@@ -23,13 +23,19 @@ PLATFORM_CFG: dict[str, dict] = {
     "kalshi":     {"short": "KALS", "color": "#3fb950",  "real": True},
     "manifold":   {"short": "MANI", "color": "#f78166",  "real": False},
     "predictit":  {"short": "PI",   "color": "#ffa657",  "real": True},
+    "metaculus":  {"short": "MCTL", "color": "#00b4d8",  "real": False},
 }
+
+# How many sports rows to show in the "All" view before collapsing to a summary.
+# Set to 0 to disable capping (Sports tab always shows all).
+_MAX_SPORTS_IN_ALL = 5
 
 AUTO_REFRESH_SEC = 60
 
 # ── Category detection ─────────────────────────────────────────────────────────
 
 _CATEGORY_KEYWORDS: dict[str, set[str]] = {
+    # NOTE: order matters — first matching category wins.
     "cat-sports": {
         "nba", "nfl", "nhl", "mlb", "soccer", "football", "basketball",
         "baseball", "hockey", "tennis", "golf", "championship", "league",
@@ -37,19 +43,36 @@ _CATEGORY_KEYWORDS: dict[str, set[str]] = {
         "knicks", "lakers", "warriors", "celtics", "bulls", "heat",
         "yankees", "mets", "dodgers", "cubs", "astros",
         "patriots", "chiefs", "eagles", "cowboys", "49ers",
-        "wimbledon", "ufc", "boxing", "wrestling",
+        "wimbledon", "ufc", "boxing", "wrestling", "olympic",
+        "tour de france", "formula 1", "f1", "grand prix",
+    },
+    # World/Geopolitics checked BEFORE US politics so geo topics land here
+    "cat-world": {
+        "greenland", "nato", "ukraine", "russia", "china", "taiwan",
+        "border", "immigration", "deportation", "ceasefire", "cease fire",
+        "nuclear", "treaty", "european union", "denmark",
+        "israel", "iran", "middle east", "gaza", "g7", "g20",
+        "sovereignty", "annexation", "invasion", "occupation",
+        "prime minister", "chancellor", "trudeau", "macron", "scholz",
+        "modi", "xi jinping", "kim jong", "zelensky", "putin",
+        "un security", "un resolution", "iran nuclear", "north korea",
+        "south korea", "japan", "india", "pakistan", "saudi",
+        "africa", "latin america", "venezuela", "brazil", "turkey",
     },
     "cat-politics": {
         "president", "trump", "biden", "harris", "election", "vote", "senator",
-        "congress", "democrat", "republican", "white house", "tariff",
+        "congress", "democrat", "republican", "white house",
         "supreme court", "legislation", "bill signed", "governor",
         "pardon", "impeach", "cabinet", "executive order",
+        "doge ", "vivek", "rfk", "desantis", "newsom", "gop",
+        "midterm", "primary", "electoral", "filibuster",
     },
     "cat-crypto": {
         "bitcoin", "btc", "ethereum", "eth", "crypto", "solana", "sol",
         "doge", "dogecoin", "blockchain", "token", "defi", "nft",
         "xrp", "ripple", "cardano", "ada", "polkadot", "binance", "coinbase",
         "100k", "200k", "50k",  # BTC price targets
+        "stablecoin", "web3", "layer 2", "base chain", "sui", "aptos",
     },
     "cat-finance": {
         # Macro / central bank
@@ -68,27 +91,35 @@ _CATEGORY_KEYWORDS: dict[str, set[str]] = {
         "tariff", "trade deficit", "sanctions",
         # Housing
         "mortgage rate", "housing market", "home price",
+        # Companies
+        "openai", "anthropic", "apple", "microsoft", "meta ", "google",
+        "amazon", "nvidia", "tesla", "spacex", "stripe", "palantir",
     },
-    "cat-world": {
-        # Geopolitics
-        "greenland", "nato", "ukraine", "russia", "china", "taiwan",
-        "border", "immigration", "deportation", "ceasefire", "cease fire",
-        "nuclear", "treaty", "european union", "denmark",
-        "israel", "iran", "middle east", "gaza", "g7", "g20",
-        "sovereignty", "annexation", "invasion", "occupation",
-        "prime minister", "chancellor", "trudeau", "macron", "scholz",
-        "modi", "xi jinping", "kim jong", "zelensky", "putin",
+    "cat-science": {
+        # AI / tech
+        "artificial intelligence", " ai ", "machine learning", "llm",
+        "gpt", "claude", "gemini", "agi", "superintelligence",
+        "autopilot", "self-driving", "autonomous", "robot",
+        # Climate / energy
+        "climate", "carbon", "co2", "global warming", "renewable",
+        "solar", "wind power", "nuclear energy", "fusion",
+        "paris agreement", "cop ", "emissions",
+        # Science / medicine
+        "vaccine", "pandemic", "cancer", "alzheimer", "gene editing",
+        "crispr", "longevity", "space", "mars", "moon", "nasa",
+        "spacex launch", "asteroid", "exoplanet",
     },
 }
 
 # (display_label, button_id) pairs — order matters for UI layout
 CATEGORIES = [
-    ("All",          "cat-all"),
-    ("⚽ Sports",    "cat-sports"),
-    ("🏛 Politics",  "cat-politics"),
-    ("🌍 World",     "cat-world"),
-    ("💰 Crypto",    "cat-crypto"),
-    ("📈 Finance",   "cat-finance"),
+    ("All",           "cat-all"),
+    ("⚽ Sports",     "cat-sports"),
+    ("🏛 Politics",   "cat-politics"),
+    ("🌍 World",      "cat-world"),
+    ("💰 Crypto",     "cat-crypto"),
+    ("📈 Finance",    "cat-finance"),
+    ("🔬 Science",    "cat-science"),
 ]
 
 # Reverse map: button_id → display label (without count)
@@ -286,7 +317,7 @@ class ControlBar(Horizontal):
         yield Label("  Sim%:")
         yield Input(value="70", id="sim-thresh")
         yield Label("  Real$:", classes="real-label")
-        yield Switch(value=True, id="sw-realonly", animate=False)
+        yield Switch(value=False, id="sw-realonly", animate=False)
         yield Label("  Sort: [bold cyan]Profit%[/]  [dim]s[/]", id="sort-lbl")
         yield Button("⟳ Refresh", id="refresh-btn", variant="primary")
         yield Button("↓ CSV", id="export-btn")
@@ -330,13 +361,14 @@ class ArbTab(Vertical):
     _all_markets:    dict  = {}
     _next_refresh:   float = 0.0
     _auto_on:        bool  = True
-    _real_only:      bool  = True
+    _real_only:      bool  = False
     _enabled_pforms: set   = set(PLATFORM_CFG.keys())
     _prev_real_keys: set   = set()   # track previously-seen real-money arb pairs
     _prev_profit_map: dict = {}      # profit_pct from the PREVIOUS scan (convergence Δ)
     _prev_opp_keys:  set   = set()   # all opp keys from previous scan (for NEW badge)
     _new_opp_keys:   set   = set()   # keys that are NEW this scan (shown in table)
     _is_first_scan:  bool  = True    # suppress NEW badges on the very first load
+    _hidden_sports_count: int = 0    # sports rows hidden in All view by cap
     _sort_mode:      str   = "profit"  # "profit" | "liq" | "close"
     _category:       str   = "cat-all"  # active category tab
 
@@ -491,7 +523,7 @@ class ArbTab(Vertical):
 
     @work(exclusive=True, thread=False)
     async def fetch_markets(self) -> None:
-        from src.apis import polymarket, kalshi, manifold, predictit
+        from src.apis import polymarket, kalshi, manifold, predictit, metaculus
 
         t0 = time.time()
 
@@ -517,10 +549,13 @@ class ArbTab(Vertical):
             try:
                 result = await coro
                 n = len(result)
+                label = (
+                    f"[bold {color}]{short}[/] [dim]{n} ✓[/]"
+                    if n > 0
+                    else f"[bold {color}]{short}[/] [dim]─[/]"
+                )
                 try:
-                    self.query_one(f"#lbl-{name}", Label).update(
-                        f"[bold {color}]{short}[/] [dim]{n} ✓[/]"
-                    )
+                    self.query_one(f"#lbl-{name}", Label).update(label)
                 except Exception:
                     pass
                 return name, result
@@ -539,6 +574,7 @@ class ArbTab(Vertical):
                 _fetch_one("kalshi",     kalshi.fetch_markets(400)),
                 _fetch_one("manifold",   manifold.fetch_markets(200)),
                 _fetch_one("predictit",  predictit.fetch_markets(200)),
+                _fetch_one("metaculus",  metaculus.fetch_markets(200)),
             )
 
             counts = []
@@ -547,10 +583,9 @@ class ArbTab(Vertical):
                 self._all_markets[name] = result
                 cfg = PLATFORM_CFG[name]
                 n = len(result)
-                if n:
+                if n > 0:
                     counts.append(f"[bold]{n}[/] {cfg['short']}")
-                else:
-                    counts.append(f"[red]ERR[/] {cfg['short']}")
+                # zero-result platforms (ERR or empty) silently skipped from count line
 
             elapsed = time.time() - t0
             self._rescan(status_prefix=f"[dim]{elapsed:.1f}s[/]  {'  '.join(counts)}  →  ")
@@ -702,6 +737,18 @@ class ArbTab(Vertical):
                 return ct.replace(tzinfo=None) if ct.tzinfo else ct
             opps.sort(key=_close_key)
 
+        # In the "All" view, cap sports rows so they don't bury everything else.
+        # Real-money rows are never capped regardless of category.
+        self._hidden_sports_count = 0
+        if self._category == "cat-all" and _MAX_SPORTS_IN_ALL > 0:
+            is_sport = lambda o: _detect_category(o.matched_title) == "cat-sports"
+            sports  = [o for o in opps if is_sport(o) and not _is_real_money(o)]
+            others  = [o for o in opps if not (is_sport(o) and not _is_real_money(o))]
+            if len(sports) > _MAX_SPORTS_IN_ALL:
+                self._hidden_sports_count = len(sports) - _MAX_SPORTS_IN_ALL
+                opps = others + sports[:_MAX_SPORTS_IN_ALL]
+            # Re-sort after merge (others already sorted, sports subset preserves order)
+
         self._filtered_opps = opps
         self._populate_table(self._filtered_opps)
 
@@ -744,27 +791,37 @@ class ArbTab(Vertical):
         table.clear()
 
         if not opps:
-            # Smart empty-state: explain WHY and what to do about it
             total = len(self.opportunities)
             if total == 0:
-                hint = "[dim italic]Fetching markets… or no cross-platform arb found[/]"
+                hint = "[dim italic]Fetching markets… please wait[/]"
+            elif self._category != "cat-all":
+                # Show how many play-money opps exist in this category (hidden by Real$)
+                in_cat = [o for o in self.opportunities
+                          if _detect_category(o.matched_title) == self._category]
+                play_in_cat  = [o for o in in_cat if not _is_real_money(o)]
+                real_in_cat  = [o for o in in_cat if _is_real_money(o)]
+                cat_lbl = _CAT_TO_LABEL.get(self._category, "").split()[-1] if _CAT_TO_LABEL.get(self._category) else "category"
+                if self._real_only and play_in_cat and not real_in_cat:
+                    hint = (
+                        f"[dim italic]{len(play_in_cat)} {cat_lbl} opportunities are play-money "
+                        f"— turn off [bold]Real$[/] [dim italic]to see them[/]"
+                    )
+                elif not in_cat:
+                    hint = f"[dim italic]No {cat_lbl} opportunities found — try refreshing or checking back later[/]"
+                else:
+                    hint = "[dim italic]No opportunities match current filters — try adjusting Min%, Sim%, or keyword[/]"
             else:
                 play_count = sum(1 for o in self.opportunities if not _is_real_money(o))
                 real_count = total - play_count
                 if self._real_only and play_count > 0 and real_count == 0:
                     hint = (
-                        f"[dim italic]Real$ filter ON — all {play_count} opportunities are "
-                        f"play-money (Manifold). Toggle Real$ off to see them.[/]"
-                    )
-                elif self._real_only and play_count > 0:
-                    hint = (
-                        f"[dim italic]Real$ filter ON — {real_count} real-money opps in other "
-                        f"categories. Click All, or turn off Real$.[/]"
+                        f"[dim italic]Real$ ON — all {play_count} opportunities are play-money. "
+                        f"Turn off Real$ to see them.[/]"
                     )
                 else:
                     hint = (
                         "[dim italic]No opportunities match current filters — "
-                        "try lowering Min%, Sim%, or switching to All categories[/]"
+                        "try lowering Min%, Sim%, or clearing the keyword filter[/]"
                     )
             table.add_row("", "", hint, "", "", "", "", "", "", "", "", "")
             return
@@ -788,11 +845,14 @@ class ArbTab(Vertical):
 
             badge, _ = _tier(opp.profit_pct)
             bar = _profit_bar(opp.profit_pct)
-            profit_markup = (
-                f"[bold green]+{opp.profit_pct:.1f}%[/] [dim]{bar}[/]"
-                if real
-                else f"[dim]+{opp.profit_pct:.1f}%[/] [dim]{bar}(p)[/]"
-            )
+            # Flag Manifold-leg opportunities with huge spreads as "mispricing noise"
+            mani_leg = "manifold" in (opp.buy_yes_on, opp.buy_no_on)
+            if mani_leg and opp.profit_pct > 50 and not real:
+                profit_markup = f"[dim]+{opp.profit_pct:.0f}%[/] [dim]{bar}[bold yellow]M↯[/][/]"
+            elif real:
+                profit_markup = f"[bold green]+{opp.profit_pct:.1f}%[/] [dim]{bar}[/]"
+            else:
+                profit_markup = f"[dim]+{opp.profit_pct:.1f}%[/] [dim]{bar}(p)[/]"
 
             table.add_row(
                 badge,
@@ -805,8 +865,17 @@ class ArbTab(Vertical):
                 profit_markup,
                 self._delta_arrow(opp),
                 _liq_str(opp),
-                f"{opp.similarity:.0f}%",
+                (f"[yellow]{opp.similarity:.0f}%⚠[/]" if opp.similarity < 80 else f"{opp.similarity:.0f}%"),
                 _close_str(opp),
+            )
+
+        # Sports overflow footer (only shown in All view when cap was hit)
+        if self._hidden_sports_count > 0:
+            table.add_row(
+                "[dim]…[/]", "",
+                f"[dim italic]+ {self._hidden_sports_count} more ⚽ Sports — "
+                f"click the Sports tab to see all[/]",
+                "", "", "", "", "", "", "", "", "",
             )
 
     # ── Actions ───────────────────────────────────────────────────────────────
@@ -925,16 +994,40 @@ class ArbTab(Vertical):
 
         bet_section = "\n".join(bet_lines) if bet_lines else ""
 
+        # Warn when title similarity is borderline (may be a false-positive match)
+        match_warn = ""
+        if opp.similarity < 80:
+            match_warn = "  [yellow]⚠ low match — verify titles below[/]"
+
+        # Manifold often prices at 50% while real-money platforms price correctly.
+        # A huge "profit" involving Manifold is almost always Manifold mispricing, not real arb.
+        mani_note = ""
+        if "manifold" in (opp.buy_yes_on, opp.buy_no_on) and opp.profit_pct > 50 and not _is_real_money(opp):
+            mani_note = "\n  [dim yellow]⚡ Manifold default-prior mismatch — research signal only, not real-money arb[/]"
+
+        # Show actual individual market titles so users can spot mis-matched pairs
+        a_title_note = (
+            f'[dim]  “{a.title[:70]}”[/]'
+            if a.title.lower() != opp.matched_title.lower() else ""
+        )
+        b_title_note = (
+            f'[dim]  “{b.title[:70]}”[/]'
+            if b.title.lower() != opp.matched_title.lower() else ""
+        )
+
         return (
             f"[bold]{opp.matched_title[:90]}[/]  {real_tag}{cat_part}{close_part}\n"
             f"  {_platform_badge(a.platform)}  YES={a.yes_price:.4f}  NO={a.no_price:.4f}"
-            f"  Vol=${a.volume:,.0f}  Liq=${a.liquidity:,.0f}  [dim]{a.url[:50]}[/]\n"
-            f"  {_platform_badge(b.platform)}  YES={b.yes_price:.4f}  NO={b.no_price:.4f}"
-            f"  Vol=${b.volume:,.0f}  Liq=${b.liquidity:,.0f}  [dim]{b.url[:50]}[/]\n"
-            f"  Spread: [yellow]{spread_pct:.1f}%[/]  │  "
+            f"  Vol=${a.volume:,.0f}  Liq=${a.liquidity:,.0f}  [dim]{a.url[:45]}[/]"
+            + (f"\n{a_title_note}" if a_title_note else "") + "\n"
+            + f"  {_platform_badge(b.platform)}  YES={b.yes_price:.4f}  NO={b.no_price:.4f}"
+            f"  Vol=${b.volume:,.0f}  Liq=${b.liquidity:,.0f}  [dim]{b.url[:45]}[/]"
+            + (f"\n{b_title_note}" if b_title_note else "") + "\n"
+            + f"  Spread: [yellow]{spread_pct:.1f}%[/]  │  "
             f"BUY YES on [bold]{opp.buy_yes_on}[/] @ {opp.yes_price:.4f}  "
             f"+  BUY NO on [bold]{opp.buy_no_on}[/] @ {opp.no_price:.4f}  "
-            f"→  [bold green]+{opp.profit_pct:.2f}%[/]  (match={opp.similarity:.0f}%){delta_note}\n"
+            f"→  [bold green]+{opp.profit_pct:.2f}%[/]  (match={opp.similarity:.0f}%){match_warn}{delta_note}\n"
             + (f"{bet_section}\n" if bet_section else "")
-            + f"  [dim]e=Edge  o=URLs  n=News  x=CSV  s=Sort  ↑↓=Navigate[/]"
+            + mani_note
+            + f"\n  [dim]e=Edge  o=URLs  n=News  x=CSV  s=Sort  ↑↓=Navigate[/]"
         )

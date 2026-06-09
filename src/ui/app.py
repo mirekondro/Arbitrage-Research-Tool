@@ -30,10 +30,11 @@ HELP_TEXT = """\
   Auto-refresh               Toggle 60-second auto-refresh
 
 [bold]── Category quick-filter (second bar) ─────────────────[/]
-  All / ⚽ Sports / 🏛 Politics / 🌍 World / 💰 Crypto / 📈 Finance
+  All / ⚽ Sports / 🏛 Politics / 🌍 World / 💰 Crypto / 📈 Finance / 🔬 Science
   Click a category to filter the table; count shown per button
   Stacks with the keyword filter and Real$ toggle
-  🌍 World = geopolitics (NATO, Greenland, Ukraine, Taiwan, etc.)
+  🌍 World = geopolitics (NATO, Greenland, Ukraine, Taiwan, Iran, etc.)
+  🔬 Science = AI/ML, climate, space, medicine, technology
 
 [bold]── Filters (third bar) ─────────────────────────────────[/]
   Min%     Minimum guaranteed profit % (default 0.5)
@@ -58,6 +59,7 @@ HELP_TEXT = """\
   [bold #3fb950]KALS[/]   Kalshi       (real money, 7 % fee)
   [bold #f78166]MANI[/]   Manifold     (play money, no fee)
   [bold #ffa657]PI  [/]   PredictIt    (real money, 10 % profit fee)
+  [bold #00b4d8]MCTL[/]   Metaculus    (forecasting / play money)
 
 [bold]── Other ────────────────────────────────────────────────[/]
   [yellow]?[/]               Show this help screen
