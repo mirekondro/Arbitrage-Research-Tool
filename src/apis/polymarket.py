@@ -91,14 +91,31 @@ async def fetch_price_history(
     condition_id: str,
     start_ts: int,
     end_ts: int,
-    interval: str = "1h",
+    interval: str = "6h",
 ) -> list[PricePoint]:
+    """
+    Fetch CLOB price history.  The endpoint requires the YES token id (a large
+    decimal integer stored in clobTokenIds[0] on the Gamma market), not the
+    conditionId.  Maximum allowed window is ~14 days; cap automatically.
+    We accept condition_id here but resolve the token id internally.
+    """
     points: list[PricePoint] = []
+
+    # Resolve YES token id from Gamma API
+    yes_token_id = await _resolve_yes_token(condition_id)
+    if not yes_token_id:
+        return points
+
+    # Clamp to 14 days maximum (API rejects longer windows)
+    max_window = 14 * 86_400
+    if end_ts - start_ts > max_window:
+        start_ts = end_ts - max_window
+
     async with httpx.AsyncClient(timeout=30, headers=HEADERS) as client:
         try:
             resp = await client.get(
                 f"{CLOB_API}/prices-history",
-                params={"market": condition_id,
+                params={"market": yes_token_id,
                         "startTs": start_ts,
                         "endTs": end_ts,
                         "interval": interval},
@@ -116,6 +133,26 @@ async def fetch_price_history(
         except Exception:
             pass
     return points
+
+
+async def _resolve_yes_token(condition_id: str) -> str:
+    """Look up the YES outcome token id for a given conditionId."""
+    import json as _json
+    async with httpx.AsyncClient(timeout=15, headers=HEADERS) as client:
+        try:
+            resp = await client.get(
+                f"{GAMMA_API}/markets",
+                params={"conditionId": condition_id, "limit": 1},
+            )
+            resp.raise_for_status()
+            markets = resp.json()
+            if not markets:
+                return ""
+            clob_ids_raw = markets[0].get("clobTokenIds", "[]")
+            clob_ids = _json.loads(clob_ids_raw) if isinstance(clob_ids_raw, str) else clob_ids_raw
+            return str(clob_ids[0]) if clob_ids else ""
+        except Exception:
+            return ""
 
 
 async def fetch_wallet_activity(address: str, limit: int = 500) -> list[Trade]:

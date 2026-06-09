@@ -159,11 +159,11 @@ class ArbTab(Vertical):
 
             try:
                 min_profit = float(self.query_one("#min-profit", Input).value or "0.5")
-            except ValueError:
+            except Exception:
                 min_profit = 0.5
             try:
                 sim_thresh = float(self.query_one("#sim-thresh", Input).value or "72")
-            except ValueError:
+            except Exception:
                 sim_thresh = 72.0
 
             opps = scan_opportunities(self._all_markets, threshold=sim_thresh)

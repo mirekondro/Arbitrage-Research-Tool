@@ -15,9 +15,7 @@ async def fetch_markets(limit: int = 300) -> list[Market]:
         while len(markets) < limit:
             params: dict = {
                 "limit": min(100, limit - len(markets)),
-                "filter": "open",
-                "sort": "liquidity",
-                "outcomeType": "BINARY",
+                "sort": "last-bet-time",  # valid values: created-time|updated-time|last-bet-time|last-comment-time
             }
             if before_id:
                 params["before"] = before_id
@@ -47,9 +45,8 @@ def _parse_market(m: dict) -> Optional[Market]:
     try:
         if m.get("outcomeType") != "BINARY":
             return None
-        if m.get("isResolved") or m.get("closeTime", 0) < datetime.now().timestamp() * 1000:
-            # skip resolved / closed
-            pass  # still include – might be recently closed and useful for edge window
+        if m.get("isResolved"):
+            return None
 
         yes_price = float(m.get("probability") or 0.5)
         yes_price = max(0.01, min(0.99, yes_price))

@@ -211,7 +211,7 @@ class EdgeTab(Vertical):
             if poly_match and poly_match.condition_id:
                 status.update(f"Fetching Polymarket history for: {poly_match.title[:60]}…")
                 pts = await polymarket.fetch_price_history(
-                    poly_match.condition_id, start_ts, now_ts, interval="1h"
+                    poly_match.condition_id, start_ts, now_ts, interval="6h"
                 )
                 if pts:
                     series["polymarket"] = [(p.timestamp, p.price) for p in pts]

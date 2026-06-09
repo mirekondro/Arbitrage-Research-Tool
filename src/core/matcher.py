@@ -2,6 +2,7 @@ import re
 from datetime import timedelta
 from typing import Optional
 
+from datetime import datetime
 from rapidfuzz import fuzz, process
 
 from src.models import Market
@@ -20,7 +21,10 @@ def _normalize(title: str) -> str:
 def _dates_close(a: Market, b: Market) -> bool:
     if a.close_time is None or b.close_time is None:
         return True
-    diff = abs((a.close_time - b.close_time).total_seconds())
+    # Normalise to naive UTC before subtracting to avoid tz-aware vs tz-naive errors
+    def _naive(dt: datetime) -> datetime:
+        return dt.replace(tzinfo=None) if dt.tzinfo else dt
+    diff = abs((_naive(a.close_time) - _naive(b.close_time)).total_seconds())
     return diff < DATE_WINDOW_DAYS * 86_400
 
 
