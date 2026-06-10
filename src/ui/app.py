@@ -22,6 +22,8 @@ HELP_TEXT = """\
   [yellow]e[/]               Open Edge Window for the selected row
   [yellow]o[/]               Open both market URLs in browser
   [yellow]n[/]               Search recent news for this topic
+  [yellow]c[/]               Copy trade details to clipboard  (requires pyperclip)
+  [yellow]w[/]               Toggle watchlist for selected row  (📌 badge; persists to disk)
   [yellow]x[/]               Export current results to CSV  (~/arb_export_*.csv)
 
 [bold]── Platform toggles (top bar) ──────────────────────────[/]
@@ -64,6 +66,11 @@ HELP_TEXT = """\
 [bold]── Other ────────────────────────────────────────────────[/]
   [yellow]?[/]               Show this help screen
   [yellow]q[/]               Quit
+
+[bold]── Persistence ──────────────────────────────────────────[/]
+  Watchlist / history stored in [dim]~/.arb_tool/[/]
+  Logs written to             [dim]~/.arb_tool/arb.log[/]
+  Edit [dim]config.toml[/] in the project root to tune thresholds
 
 [dim]Press Escape or ? to close[/]
 """
@@ -181,6 +188,8 @@ class ArbitrageApp(App):
         Binding("slash",         "focus_filter",      "Filter",      show=False),
         Binding("x",             "export_csv",        "Export CSV",  show=False),
         Binding("s",             "cycle_sort",        "Sort",        show=False),
+        Binding("c",             "copy_trade",        "Copy",        show=False),
+        Binding("w",             "toggle_watch",      "Watch",       show=False),
     ]
 
     def compose(self) -> ComposeResult:
@@ -248,6 +257,18 @@ class ArbitrageApp(App):
     def action_cycle_sort(self) -> None:
         try:
             self.query_one(ArbTab)._cycle_sort()
+        except Exception:
+            pass
+
+    def action_copy_trade(self) -> None:
+        try:
+            self.query_one(ArbTab)._copy_trade()
+        except Exception:
+            pass
+
+    def action_toggle_watch(self) -> None:
+        try:
+            self.query_one(ArbTab)._toggle_watch()
         except Exception:
             pass
 

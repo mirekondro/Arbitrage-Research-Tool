@@ -10,10 +10,35 @@ Keys
   q           quit
   r / Ctrl+R  refresh arbitrage scan
   1 / 2 / 3   jump to tab
+  c           copy trade details to clipboard
+  w           toggle watchlist for selected row
 """
+import logging
 import sys
+from pathlib import Path
+
+
+def _setup_logging() -> None:
+    """Configure file-based logging to ~/.arb_tool/arb.log."""
+    log_dir = Path.home() / ".arb_tool"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "arb.log"
+
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[
+            logging.FileHandler(log_file, encoding="utf-8"),
+        ],
+    )
+    # Keep the console quiet — TUI owns the terminal
+    logging.getLogger().addHandler(logging.NullHandler())
+    logging.getLogger("arb_tool").info("─── session start ───")
+
 
 def main() -> None:
+    _setup_logging()
     try:
         from src.ui.app import ArbitrageApp
     except ImportError as exc:

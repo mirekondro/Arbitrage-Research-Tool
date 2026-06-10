@@ -1,0 +1,46 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Arbitrage Research Tool — user configuration
+# Edit freely; the app reads this at startup (or on reload).
+# ─────────────────────────────────────────────────────────────────────────────
+
+[scan]
+# Minimum guaranteed profit % to surface an opportunity (noise filter).
+# Lower → more results but more false positives from play-money platforms.
+min_profit_pct = 0.5
+
+# Minimum combined volume across both legs (in USD).  0 = no filter.
+min_volume_usd = 0
+
+# Minimum title-similarity score (0–100) for cross-platform matching.
+# Below 70 you'll see a yellow ⚠ warning in the detail panel.
+similarity_threshold = 70.0
+
+# Auto-refresh interval in seconds (minimum 10).
+auto_refresh_seconds = 60
+
+# Maximum number of play-money sports rows shown in the "All" view.
+# Click the ⚽ Sports category tab to see all of them.  0 = no cap.
+max_sports_in_all_view = 5
+
+
+[display]
+# Start with the Real$ filter ON (only show real-money opportunities).
+real_money_only = false
+
+# Default sort column: "profit" | "liq" | "close"
+default_sort = "profit"
+
+
+[platforms]
+# How many markets to fetch per platform.  Reduce if fetches are slow.
+polymarket_limit = 400
+kalshi_limit     = 400
+manifold_limit   = 200
+predictit_limit  = 200
+metaculus_limit  = 200
+
+
+[alerts]
+# Ring the terminal bell (ASCII BEL) when a new real-money arb appears.
+# Also fires a desktop toast regardless of this setting.
+sound_on_real_arb = false

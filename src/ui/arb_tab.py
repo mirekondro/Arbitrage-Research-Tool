@@ -15,6 +15,8 @@ from textual.widgets import Button, DataTable, Input, Label, Static, Switch
 
 from src.models import ArbitrageOpportunity, Market
 from src.core.arbitrage import scan_opportunities, REAL_MONEY_PLATFORMS
+from src.core.history import OppHistory
+from src.core.config import get as cfg_get
 
 # ── Platform config ────────────────────────────────────────────────────────────
 
@@ -371,6 +373,7 @@ class ArbTab(Vertical):
     _hidden_sports_count: int = 0    # sports rows hidden in All view by cap
     _sort_mode:      str   = "profit"  # "profit" | "liq" | "close"
     _category:       str   = "cat-all"  # active category tab
+    _opp_history:    object = None       # OppHistory instance, set in on_mount
 
     # ── Compose ───────────────────────────────────────────────────────────────
 
@@ -383,12 +386,13 @@ class ArbTab(Vertical):
         yield DetailPanel(id="detail-panel")
 
     def on_mount(self) -> None:
+        self._opp_history = OppHistory()
         table = self.query_one("#arb-table", DataTable)
         table.add_columns(
             "Tier", "#", "Event",
             "YES on", "YES $",
             "NO on",  "NO $",
-            "Profit%", "Δ", "Liq", "Match%", "Closes",
+            "Profit%", "Δ", "Liq", "Match%", "Closes", "Age",
         )
         # Sync state from Switch widgets after the whole widget tree is mounted.
         # Textual may fire Switch.Changed events during compose with intermediate
@@ -475,6 +479,10 @@ class ArbTab(Vertical):
             self._open_news()
         elif key == "s":
             self._cycle_sort()
+        elif key == "c":
+            self._copy_trade()
+        elif key == "w":
+            self._toggle_watch()
 
     # ── Reactive watchers ─────────────────────────────────────────────────────
 
@@ -653,12 +661,23 @@ class ArbTab(Vertical):
             if self._real_only else
             f"  [dim]{real} real · {play} play[/]"
         )
+
+        # Record first-seen timestamps and prune old entries
+        if self._opp_history:
+            for o in opps:
+                self._opp_history.record(_opp_key(o))
+            self._opp_history.prune_stale({_opp_key(o) for o in opps})
+
+        watched_n = self._opp_history.watched_count if self._opp_history else 0
+        watch_part = f"  [cyan]📌 {watched_n} watched[/]" if watched_n > 0 else ""
+
         self._set_status(
             f"{status_prefix}"
             f"[bold white]{len(opps)}[/] total"
             f"{real_filter_note}"
             f"{real_alert}"
-            f"  [dim]│  {now}  │  s={sort_lbl}  e=edge  o=urls  n=news  x=csv[/]"
+            f"{watch_part}"
+            f"  [dim]│  {now}  │  s={sort_lbl}  e=edge  c=copy  w=watch  o=urls  n=news  x=csv[/]"
         )
 
         # Toast for NEW real-money opportunities
@@ -677,6 +696,15 @@ class ArbTab(Vertical):
                     severity="warning",
                     timeout=10,
                 )
+        # Ring terminal bell on new real-money arb if config enables it
+        if new_keys and self._prev_real_keys and cfg_get("alerts.sound_on_real_arb", False):
+            import sys as _sys
+            try:
+                _sys.stdout.write("\a")
+                _sys.stdout.flush()
+            except Exception:
+                pass
+
         self._prev_real_keys = cur_real_keys
 
         # Set reactive so downstream reactive watchers stay consistent,
@@ -823,7 +851,7 @@ class ArbTab(Vertical):
                         "[dim italic]No opportunities match current filters — "
                         "try lowering Min%, Sim%, or clearing the keyword filter[/]"
                     )
-            table.add_row("", "", hint, "", "", "", "", "", "", "", "", "")
+            table.add_row("", "", hint, "", "", "", "", "", "", "", "", "", "")
             return
 
         for i, opp in enumerate(opps, 1):
@@ -833,15 +861,16 @@ class ArbTab(Vertical):
             if len(title) > 44:
                 title = title[:43] + "…"
 
-            # Title prefix: star for real-money, ✦ badge for genuinely NEW
+            # Title prefix: 📌 watched, ★ real-money, ✦ new this scan
+            watch_pfx = "📌 " if (self._opp_history and self._opp_history.is_watched(_opp_key(opp))) else ""
             if real and is_new:
-                title_cell = f"[bold green]★[/] [bold magenta]NEW[/] {title}"
+                title_cell = f"{watch_pfx}[bold green]★[/] [bold magenta]NEW[/] {title}"
             elif real:
-                title_cell = f"[bold green]★[/] {title}"
+                title_cell = f"{watch_pfx}[bold green]★[/] {title}"
             elif is_new:
-                title_cell = f"[bold magenta]✦[/] {title}"
+                title_cell = f"{watch_pfx}[bold magenta]✦[/] {title}"
             else:
-                title_cell = title
+                title_cell = f"{watch_pfx}{title}"
 
             badge, _ = _tier(opp.profit_pct)
             bar = _profit_bar(opp.profit_pct)
@@ -867,6 +896,7 @@ class ArbTab(Vertical):
                 _liq_str(opp),
                 (f"[yellow]{opp.similarity:.0f}%⚠[/]" if opp.similarity < 80 else f"{opp.similarity:.0f}%"),
                 _close_str(opp),
+                self._age_markup(_opp_key(opp)),
             )
 
         # Sports overflow footer (only shown in All view when cap was hit)
@@ -875,7 +905,7 @@ class ArbTab(Vertical):
                 "[dim]…[/]", "",
                 f"[dim italic]+ {self._hidden_sports_count} more ⚽ Sports — "
                 f"click the Sports tab to see all[/]",
-                "", "", "", "", "", "", "", "", "",
+                "", "", "", "", "", "", "", "", "", "",
             )
 
     # ── Actions ───────────────────────────────────────────────────────────────
@@ -934,6 +964,72 @@ class ArbTab(Vertical):
                     o.market_a.url, o.market_b.url,
                 ])
         self._set_status(f"[green]Exported {len(self._filtered_opps)} rows → {path}[/]")
+
+    def _copy_trade(self) -> None:
+        """Copy trade instructions for the selected row to the clipboard (c key)."""
+        idx = self.query_one("#arb-table", DataTable).cursor_row
+        if 0 <= idx < len(self._filtered_opps):
+            opp = self._filtered_opps[idx]
+            text = (
+                f"ARB: {opp.matched_title}\n"
+                f"  BUY YES on {opp.buy_yes_on} @ {opp.yes_price:.4f}\n"
+                f"  BUY NO  on {opp.buy_no_on} @ {opp.no_price:.4f}\n"
+                f"  Expected profit: +{opp.profit_pct:.2f}%\n"
+                f"  YES URL: {opp.market_a.url}\n"
+                f"  NO  URL: {opp.market_b.url}\n"
+            )
+            try:
+                import pyperclip  # type: ignore[import]
+                pyperclip.copy(text)
+                self._set_status(
+                    f"[green]✓ Copied to clipboard:[/] {opp.matched_title[:55]}"
+                )
+            except ImportError:
+                self._set_status(
+                    "[yellow]pyperclip not installed — run: pip install pyperclip[/]"
+                )
+            except Exception:
+                # Fallback: show trade legs in status bar
+                self._set_status(
+                    f"[bold]{opp.buy_yes_on}[/] YES {opp.yes_price:.3f}  "
+                    f"[bold]{opp.buy_no_on}[/] NO {opp.no_price:.3f}  "
+                    f"+{opp.profit_pct:.2f}%"
+                )
+
+    def _toggle_watch(self) -> None:
+        """Toggle watchlist for the selected row and persist to disk (w key)."""
+        idx = self.query_one("#arb-table", DataTable).cursor_row
+        if 0 <= idx < len(self._filtered_opps):
+            opp = self._filtered_opps[idx]
+            key = _opp_key(opp)
+            if self._opp_history is None:
+                return
+            watched = self._opp_history.toggle_watch(key)
+            if watched:
+                self._set_status(
+                    f"[cyan]📌 Watching:[/] {opp.matched_title[:58]}"
+                )
+            else:
+                self._set_status(
+                    f"[dim]Removed from watchlist:[/] {opp.matched_title[:52]}"
+                )
+            # Redraw immediately so 📌 badge appears / disappears
+            self._populate_table(self._filtered_opps)
+
+    def _age_markup(self, key: str) -> str:
+        """Return Rich markup for the Age column (new / 5m / 3h / 2d)."""
+        if self._opp_history is None:
+            return "[dim]─[/]"
+        age = self._opp_history.age_str(key)
+        if age == "new":
+            return "[bold magenta]new[/]"
+        if not age:
+            return "[dim]─[/]"
+        if age.endswith("m"):
+            return f"[cyan]{age}[/]"
+        if age.endswith("h"):
+            return f"[yellow]{age}[/]"
+        return f"[dim]{age}[/]"  # days
 
     def _set_status(self, msg: str) -> None:
         try:
@@ -1005,6 +1101,19 @@ class ArbTab(Vertical):
         if "manifold" in (opp.buy_yes_on, opp.buy_no_on) and opp.profit_pct > 50 and not _is_real_money(opp):
             mani_note = "\n  [dim yellow]⚡ Manifold default-prior mismatch — research signal only, not real-money arb[/]"
 
+        # Watchlist status and first-seen age
+        _hist_key = _opp_key(opp)
+        watch_status = (
+            "  [cyan]📌 WATCHING[/]"
+            if (self._opp_history and self._opp_history.is_watched(_hist_key))
+            else ""
+        )
+        _age_val = self._opp_history.age_str(_hist_key) if self._opp_history else ""
+        age_part = (
+            f"  [bold magenta]★ new this scan[/]" if _age_val == "new" else
+            f"  [dim]first seen {_age_val} ago[/]" if _age_val else ""
+        )
+
         # Show actual individual market titles so users can spot mis-matched pairs
         a_title_note = (
             f'[dim]  “{a.title[:70]}”[/]'
@@ -1016,7 +1125,7 @@ class ArbTab(Vertical):
         )
 
         return (
-            f"[bold]{opp.matched_title[:90]}[/]  {real_tag}{cat_part}{close_part}\n"
+            f"[bold]{opp.matched_title[:90]}[/]  {real_tag}{cat_part}{close_part}{watch_status}{age_part}\n"
             f"  {_platform_badge(a.platform)}  YES={a.yes_price:.4f}  NO={a.no_price:.4f}"
             f"  Vol=${a.volume:,.0f}  Liq=${a.liquidity:,.0f}  [dim]{a.url[:45]}[/]"
             + (f"\n{a_title_note}" if a_title_note else "") + "\n"
@@ -1029,5 +1138,5 @@ class ArbTab(Vertical):
             f"→  [bold green]+{opp.profit_pct:.2f}%[/]  (match={opp.similarity:.0f}%){match_warn}{delta_note}\n"
             + (f"{bet_section}\n" if bet_section else "")
             + mani_note
-            + f"\n  [dim]e=Edge  o=URLs  n=News  x=CSV  s=Sort  ↑↓=Navigate[/]"
+            + f"\n  [dim]e=Edge  o=URLs  n=News  c=Copy  w=Watch  x=CSV  s=Sort  ↑↓=Navigate[/]"
         )
