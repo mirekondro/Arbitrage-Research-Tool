@@ -18,6 +18,29 @@ A terminal UI for finding price discrepancies across prediction markets — real
   📊 Max deployable: $3,200 → +$166 (limited by kalshi liq)
 ```
 
+## Quick install
+
+```bash
+# Recommended — isolated environment, auto-updates
+pipx install arb-tool
+
+# Homebrew (macOS / Linux)
+brew tap miroslavondrousek/arb-tool https://github.com/miroslavondrousek/Arbitrage-Research-Tool
+brew install --HEAD arb-tool   # until a versioned release tag exists
+
+# Plain pip (into current environment)
+pip install arb-tool
+```
+
+Then just run:
+```bash
+arb-tool
+```
+
+> **Why pipx?**  pipx installs Python CLI tools in their own isolated virtualenv so they never conflict with other packages.  It's the recommended way to install command-line Python apps.
+
+---
+
 ## What it does
 
 Connects to five prediction market platforms simultaneously, finds markets covering the same event, and highlights when the combined cost of YES + NO is less than $1 — a risk-free arbitrage.
@@ -31,16 +54,49 @@ Connects to five prediction market platforms simultaneously, finds markets cover
 | `MANI` | Manifold | Play money | none |
 | `MCTL` | Metaculus | Forecasting / play | none |
 
-## Install
+## Install in detail
+
+### Option 1 — pipx (recommended for end users)
+
+```bash
+pipx install arb-tool
+arb-tool
+```
+
+Upgrades: `pipx upgrade arb-tool`
+
+### Option 2 — Homebrew (macOS / Linux)
+
+```bash
+# Add the custom tap (one-time)
+brew tap miroslavondrousek/arb-tool \
+    https://github.com/miroslavondrousek/Arbitrage-Research-Tool
+
+# Install (HEAD = latest dev branch; drop --HEAD once v1.0.0 tag exists)
+brew install --HEAD arb-tool
+```
+
+Upgrades: `brew reinstall --HEAD arb-tool`
+
+A default config is installed to `$(brew --prefix)/etc/arb-tool/config.toml.default`. Copy it to `~/.arb_tool/config.toml` to customise.
+
+### Option 3 — From source (developers)
 
 ```bash
 git clone https://github.com/miroslavondrousek/Arbitrage-Research-Tool.git
 cd Arbitrage-Research-Tool
-pip install -r requirements.txt
-python main.py
+pip install -e .        # installs in editable mode with all deps
+arb-tool                # or: python main.py
 ```
 
-Python 3.10+ required. Python 3.11+ recommended (uses built-in `tomllib`; older versions automatically use `tomli`).
+### Option 4 — Plain pip
+
+```bash
+pip install arb-tool
+arb-tool
+```
+
+**Requirements:** Python 3.10+. Python 3.11+ recommended (`tomllib` is built-in; older versions automatically use `tomli`).
 
 ## Key bindings
 
@@ -221,6 +277,36 @@ src/
 config.toml          User-editable settings
 main.py              Entry point + logging setup
 ```
+
+## Publishing to PyPI
+
+```bash
+# Install build tools (one-time)
+pip install build twine
+
+# Build sdist + wheel
+python -m build
+
+# Check the package before upload
+twine check dist/*
+
+# Upload to PyPI (needs ~/.pypirc or TWINE_PASSWORD env var)
+twine upload dist/*
+```
+
+After uploading, `pipx install arb-tool` and `pip install arb-tool` will work globally.
+
+### Updating the Homebrew formula after a release
+
+1. Create a GitHub release with tag `v1.x.y`
+2. Download the auto-generated tarball and get its hash:
+   ```bash
+   curl -L https://github.com/miroslavondrousek/Arbitrage-Research-Tool/archive/refs/tags/v1.x.y.tar.gz \
+        -o arb-tool-1.x.y.tar.gz
+   shasum -a 256 arb-tool-1.x.y.tar.gz
+   ```
+3. Edit `Formula/arb-tool.rb` — uncomment and update `url`, `sha256`, `version`
+4. Commit and push — `brew upgrade arb-tool` will pick it up automatically
 
 ## License
 

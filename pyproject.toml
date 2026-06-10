@@ -1,0 +1,80 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# ── Project metadata ──────────────────────────────────────────────────────────
+
+[project]
+name = "arb-tool"
+version = "1.0.0"
+description = "Terminal UI for real-time cross-platform prediction market arbitrage"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Miroslav Ondrousek", email = "mirekondro@post.cz" },
+]
+requires-python = ">=3.10"
+keywords = [
+    "arbitrage", "prediction-markets", "polymarket", "kalshi",
+    "predictit", "manifold", "tui", "terminal", "finance",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Terminals",
+]
+dependencies = [
+    "textual>=0.52.0",
+    "httpx>=0.27.0",
+    "rapidfuzz>=3.6.1",
+    "plotext>=5.2.8",
+    "python-dateutil>=2.8.2",
+    "rich>=13.7.0",
+    "pyperclip>=1.8.2",
+    "tomli>=2.0.1; python_version < '3.11'",
+]
+
+[project.scripts]
+arb-tool = "arb_tool.cli:main"
+
+[project.urls]
+Homepage   = "https://github.com/miroslavondrousek/Arbitrage-Research-Tool"
+Repository = "https://github.com/miroslavondrousek/Arbitrage-Research-Tool"
+"Bug Tracker" = "https://github.com/miroslavondrousek/Arbitrage-Research-Tool/issues"
+
+# ── Build targets ─────────────────────────────────────────────────────────────
+
+[tool.hatch.build.targets.wheel]
+# Include both the thin wrapper package and the full source tree.
+# Install via pipx / brew to get an isolated environment (avoids the
+# unlikely conflict with another package also named 'src').
+packages = ["arb_tool", "src"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "arb_tool/",
+    "src/",
+    "main.py",
+    "config.toml",
+    "README.md",
+    "requirements.txt",
+    "LICENSE",
+]
+
+# ── Dev / tooling ─────────────────────────────────────────────────────────────
+
+[tool.hatch.envs.default]
+dependencies = ["hatch", "build", "twine"]
+
+[tool.hatch.envs.default.scripts]
+build   = "python -m build"
+publish = "twine upload dist/*"
+check   = "twine check dist/*"

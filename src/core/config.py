@@ -1,8 +1,12 @@
 """
-config.py — load user settings from config.toml at project root.
+config.py — load user settings from config.toml.
+
+Search order:
+  1. ~/.arb_tool/config.toml   (user config; created on first run / copied there)
+  2. <project-root>/config.toml (dev mode — works when running from a git checkout)
 
 Uses Python 3.11+'s built-in tomllib; falls back to tomli for older versions.
-Falls back silently to safe defaults when the file is missing or invalid.
+Falls back silently to safe defaults when no file is found or the file is invalid.
 
 Usage:
     from src.core.config import get as cfg_get
@@ -17,8 +21,19 @@ from typing import Any
 
 log = logging.getLogger("arb_tool.config")
 
-# Locate config.toml relative to this file's package root
-_CONFIG_FILE = Path(__file__).parents[2] / "config.toml"
+
+def _find_config() -> Path:
+    """Return the first config.toml that exists, or the user-config path (may not exist)."""
+    # 1. User config — works for both installed (pip/pipx/brew) and dev
+    user_cfg = Path.home() / ".arb_tool" / "config.toml"
+    if user_cfg.exists():
+        return user_cfg
+    # 2. Project root — works when running directly from a git checkout
+    dev_cfg = Path(__file__).parents[2] / "config.toml"
+    if dev_cfg.exists():
+        return dev_cfg
+    # Return user path so the FileNotFoundError message is useful
+    return user_cfg
 
 # Safe defaults — mirrors the structure of config.toml
 _DEFAULTS: dict[str, Any] = {
@@ -57,14 +72,15 @@ def _load() -> dict[str, Any]:
                 _cache = dict(_DEFAULTS)
                 return _cache
 
-        raw = tomllib.loads(_CONFIG_FILE.read_text())
+        cfg_path = _find_config()
+        raw = tomllib.loads(cfg_path.read_text())
         for section, entries in raw.items():
             if isinstance(entries, dict):
                 for key, value in entries.items():
                     flat[f"{section}.{key}"] = value
             else:
                 flat[section] = entries
-        log.debug("Loaded config from %s", _CONFIG_FILE)
+        log.debug("Loaded config from %s", cfg_path)
     except FileNotFoundError:
         log.debug("config.toml not found; using built-in defaults")
     except Exception as exc:
