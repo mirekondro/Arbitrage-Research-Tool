@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1080" />
+<title>Instagram Story — Arbitrage Research Tool</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;600;700;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1080px;
+    height: 1920px;
+    background: #0d1117;
+    font-family: 'Inter', sans-serif;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ── Background glows ──────────────────────────────────────── */
+  .glow-top {
+    position: absolute;
+    top: -200px; left: 50%;
+    transform: translateX(-50%);
+    width: 900px; height: 900px;
+    background: radial-gradient(circle, rgba(88,166,255,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .glow-mid {
+    position: absolute;
+    top: 800px; left: 50%;
+    transform: translateX(-50%);
+    width: 1200px; height: 800px;
+    background: radial-gradient(circle, rgba(63,185,80,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .glow-bottom {
+    position: absolute;
+    bottom: -100px; left: 50%;
+    transform: translateX(-50%);
+    width: 800px; height: 600px;
+    background: radial-gradient(circle, rgba(163,113,247,0.10) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* ── Top noise/grid overlay ────────────────────────────────── */
+  .scanlines {
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(255,255,255,0.012) 3px,
+      rgba(255,255,255,0.012) 4px
+    );
+    pointer-events: none;
+  }
+
+  /* ── Layout ────────────────────────────────────────────────── */
+  .story {
+    position: relative;
+    width: 1080px;
+    height: 1920px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 80px 72px 64px;
+    gap: 0;
+  }
+
+  /* ── Header ────────────────────────────────────────────────── */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 56px;
+    align-self: flex-start;
+  }
+
+  .logo-icon {
+    width: 72px; height: 72px;
+    background: #161b22;
+    border: 1.5px solid #30363d;
+    border-radius: 18px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 0 24px rgba(88,166,255,0.15);
+  }
+  .logo-icon svg { width: 48px; height: 48px; }
+
+  .header-text { display: flex; flex-direction: column; gap: 4px; }
+  .header-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 26px;
+    font-weight: 700;
+    color: #c9d1d9;
+    letter-spacing: 0.02em;
+  }
+  .header-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    color: #3fb950;
+    letter-spacing: 0.04em;
+  }
+
+  /* ── Hero headline ─────────────────────────────────────────── */
+  .headline {
+    font-size: 96px;
+    font-weight: 900;
+    line-height: 1.0;
+    letter-spacing: -0.03em;
+    color: #ffffff;
+    text-align: left;
+    align-self: flex-start;
+    margin-bottom: 36px;
+  }
+  .headline .accent-blue  { color: #58a6ff; }
+  .headline .accent-green { color: #3fb950; }
+
+  .subheadline {
+    font-size: 34px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: #8b949e;
+    text-align: left;
+    align-self: flex-start;
+    margin-bottom: 64px;
+    max-width: 900px;
+  }
+  .subheadline strong { color: #c9d1d9; font-weight: 600; }
+
+  /* ── Terminal mockup ───────────────────────────────────────── */
+  .terminal {
+    width: 100%;
+    background: #010409;
+    border: 1.5px solid #30363d;
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 64px;
+    box-shadow:
+      0 0 0 1px rgba(88,166,255,0.05),
+      0 24px 80px rgba(0,0,0,0.6),
+      0 0 60px rgba(88,166,255,0.08);
+  }
+
+  .terminal-bar {
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    padding: 20px 28px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .dot { width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; }
+  .dot-red    { background: #ff5f57; }
+  .dot-yellow { background: #febc2e; }
+  .dot-green  { background: #28c840; }
+  .terminal-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    color: #8b949e;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .terminal-body {
+    padding: 32px 36px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    line-height: 1.7;
+  }
+
+  .t-status {
+    color: #8b949e;
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+  .t-platform { font-weight: 700; }
+  .t-poly  { color: #a371f7; }
+  .t-kals  { color: #3fb950; }
+  .t-mani  { color: #f78166; }
+  .t-pi    { color: #ffa657; }
+  .t-mctl  { color: #00b4d8; }
+  .t-dim   { color: #484f58; }
+  .t-white { color: #c9d1d9; }
+
+  .t-divider {
+    border: none;
+    border-top: 1px solid #21262d;
+    margin: 14px 0;
+  }
+
+  .t-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0;
+    padding: 6px 0;
+  }
+  .t-tier     { width: 64px; flex-shrink: 0; }
+  .t-num      { width: 48px; flex-shrink: 0; color: #484f58; }
+  .t-title    { flex: 1; color: #c9d1d9; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding-right: 24px; }
+  .t-profit   { width: 140px; flex-shrink: 0; text-align: right; font-weight: 700; }
+
+  .profit-real  { color: #3fb950; }
+  .profit-play  { color: #484f58; }
+  .tier-gold    { color: #ffd700; }
+  .tier-green   { color: #3fb950; }
+  .tier-cyan    { color: #58a6ff; }
+  .tier-dim     { color: #484f58; }
+
+  .t-detail {
+    margin-top: 18px;
+    padding: 18px 20px;
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    color: #8b949e;
+    font-size: 19px;
+    line-height: 1.8;
+  }
+  .t-detail .green { color: #3fb950; font-weight: 700; }
+  .t-detail .blue  { color: #58a6ff; }
+
+  /* ── Stats row ─────────────────────────────────────────────── */
+  .stats {
+    display: flex;
+    gap: 24px;
+    width: 100%;
+    margin-bottom: 64px;
+  }
+  .stat-card {
+    flex: 1;
+    background: #161b22;
+    border: 1.5px solid #30363d;
+    border-radius: 16px;
+    padding: 32px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .stat-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 54px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .stat-num.blue   { color: #58a6ff; }
+  .stat-num.green  { color: #3fb950; }
+  .stat-num.purple { color: #a371f7; }
+  .stat-label {
+    font-size: 20px;
+    color: #8b949e;
+    text-align: center;
+    line-height: 1.3;
+  }
+
+  /* ── Platform pills ────────────────────────────────────────── */
+  .platforms {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    margin-bottom: 64px;
+  }
+  .pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    padding: 12px 24px;
+    border-radius: 100px;
+    border: 2px solid;
+    letter-spacing: 0.04em;
+  }
+  .pill-poly  { color: #a371f7; border-color: #a371f7; background: rgba(163,113,247,0.08); }
+  .pill-kals  { color: #3fb950; border-color: #3fb950; background: rgba(63,185,80,0.08);   }
+  .pill-pi    { color: #ffa657; border-color: #ffa657; background: rgba(255,166,87,0.08);  }
+  .pill-mani  { color: #f78166; border-color: #f78166; background: rgba(247,129,102,0.08); }
+  .pill-mctl  { color: #00b4d8; border-color: #00b4d8; background: rgba(0,180,216,0.08);   }
+
+  /* ── Install block ─────────────────────────────────────────── */
+  .install-block {
+    width: 100%;
+    background: #161b22;
+    border: 1.5px solid #30363d;
+    border-radius: 16px;
+    padding: 32px 40px;
+    margin-bottom: 52px;
+  }
+  .install-label {
+    font-size: 20px;
+    color: #8b949e;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .install-cmd {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 30px;
+    color: #c9d1d9;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .install-cmd .prompt { color: #3fb950; }
+  .install-cmd .cmd    { color: #58a6ff; }
+
+  /* ── Footer ────────────────────────────────────────────────── */
+  .footer {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+  }
+  .website {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 30px;
+    color: #58a6ff;
+    letter-spacing: 0.02em;
+  }
+  .hashtags {
+    font-size: 22px;
+    color: #484f58;
+    text-align: center;
+    line-height: 1.8;
+  }
+  .hashtags span { color: #30363d; }
+</style>
+</head>
+<body>
+
+<!-- Background effects -->
+<div class="glow-top"></div>
+<div class="glow-mid"></div>
+<div class="glow-bottom"></div>
+<div class="scanlines"></div>
+
+<div class="story">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo-icon">
+      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <rect width="64" height="64" rx="12" fill="#0d1117"/>
+        <rect x="9" y="30" width="12" height="28" rx="2" fill="#a371f7"/>
+        <rect x="43" y="18" width="12" height="40" rx="2" fill="#3fb950"/>
+        <line x1="32" y1="46" x2="32" y2="16" stroke="#58a6ff" stroke-width="3" stroke-linecap="round"/>
+        <polyline points="25,24 32,14 39,24" stroke="#58a6ff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="header-text">
+      <div class="header-name">arb-tool</div>
+      <div class="header-sub">v1.0.0 · open source</div>
+    </div>
+  </div>
+
+  <!-- Headline -->
+  <div class="headline">
+    Find<br/>
+    <span class="accent-green">risk&#8209;free</span><br/>
+    <span class="accent-blue">trades.</span>
+  </div>
+
+  <div class="subheadline">
+    Scans <strong>5 prediction markets</strong> simultaneously and surfaces guaranteed&#8209;profit arbitrage <strong>in real time</strong>.
+  </div>
+
+  <!-- Terminal mockup -->
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <div class="terminal-title">arb-tool — zsh</div>
+    </div>
+    <div class="terminal-body">
+      <div class="t-status">
+        <span class="t-platform t-poly">POLY</span> <span class="t-dim">68 ✓</span>&nbsp;&nbsp;
+        <span class="t-platform t-kals">KALS</span> <span class="t-dim">42 ✓</span>&nbsp;&nbsp;
+        <span class="t-platform t-mani">MANI</span> <span class="t-dim">200 ✓</span>&nbsp;&nbsp;
+        <span class="t-platform t-pi">PI</span> <span class="t-dim">88 ✓</span>&nbsp;&nbsp;
+        <span class="t-dim">⟳ 47s</span>
+      </div>
+      <hr class="t-divider"/>
+      <div class="t-row">
+        <span class="t-tier tier-gold">●●●</span>
+        <span class="t-num">1</span>
+        <span class="t-title">Will Greenland become part of the US?</span>
+        <span class="t-profit profit-real">+5.24%</span>
+      </div>
+      <div class="t-row">
+        <span class="t-tier tier-green">●● </span>
+        <span class="t-num">2</span>
+        <span class="t-title">Trump signs executive order on tariffs</span>
+        <span class="t-profit profit-real">+3.81%</span>
+      </div>
+      <div class="t-row">
+        <span class="t-tier tier-cyan">●  </span>
+        <span class="t-num">3</span>
+        <span class="t-title">Bitcoin above $200K by Dec 2025</span>
+        <span class="t-profit profit-play">+1.20%(p)</span>
+      </div>
+      <div class="t-detail">
+        BUY YES on <span class="blue">polymarket</span> @ 0.1200&nbsp;&nbsp;+&nbsp;&nbsp;BUY NO on <span class="blue">kalshi</span> @ 0.8200<br/>
+        💰 $1,000 → <span class="green">+$52 guaranteed profit</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-num blue">5</div>
+      <div class="stat-label">platforms<br/>monitored</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num green">60s</div>
+      <div class="stat-label">auto&#8209;refresh<br/>interval</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num purple">$0</div>
+      <div class="stat-label">cost to<br/>install</div>
+    </div>
+  </div>
+
+  <!-- Platform pills -->
+  <div class="platforms">
+    <span class="pill pill-poly">POLYMARKET</span>
+    <span class="pill pill-kals">KALSHI</span>
+    <span class="pill pill-pi">PREDICTIT</span>
+    <span class="pill pill-mani">MANIFOLD</span>
+    <span class="pill pill-mctl">METACULUS</span>
+  </div>
+
+  <!-- Install -->
+  <div class="install-block">
+    <div class="install-label">Install</div>
+    <div class="install-cmd">
+      <span class="prompt">$</span>
+      <span class="cmd">brew install mirekondro/arb-tool/arb-tool</span>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="website">arbitragetool.lovable.app</div>
+    <div class="hashtags">
+      #PredictionMarkets &nbsp;#Arbitrage &nbsp;#Polymarket<br/>
+      #Kalshi &nbsp;#Trading &nbsp;#OpenSource &nbsp;#TerminalApp
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
