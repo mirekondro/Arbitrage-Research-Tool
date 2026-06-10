@@ -25,7 +25,7 @@ A terminal UI for finding price discrepancies across prediction markets — real
 pipx install arb-tool
 
 # Homebrew (macOS / Linux)
-brew tap miroslavondrousek/arb-tool https://github.com/miroslavondrousek/Arbitrage-Research-Tool
+brew tap mirekondro/arb-tool https://github.com/mirekondro/Arbitrage-Research-Tool
 brew install --HEAD arb-tool   # until a versioned release tag exists
 
 # Plain pip (into current environment)
@@ -69,8 +69,8 @@ Upgrades: `pipx upgrade arb-tool`
 
 ```bash
 # Add the custom tap (one-time)
-brew tap miroslavondrousek/arb-tool \
-    https://github.com/miroslavondrousek/Arbitrage-Research-Tool
+brew tap mirekondro/arb-tool \
+    https://github.com/mirekondro/Arbitrage-Research-Tool
 
 # Install (HEAD = latest dev branch; drop --HEAD once v1.0.0 tag exists)
 brew install --HEAD arb-tool
@@ -83,7 +83,7 @@ A default config is installed to `$(brew --prefix)/etc/arb-tool/config.toml.defa
 ### Option 3 — From source (developers)
 
 ```bash
-git clone https://github.com/miroslavondrousek/Arbitrage-Research-Tool.git
+git clone https://github.com/mirekondro/Arbitrage-Research-Tool.git
 cd Arbitrage-Research-Tool
 pip install -e .        # installs in editable mode with all deps
 arb-tool                # or: python main.py
@@ -301,7 +301,7 @@ After uploading, `pipx install arb-tool` and `pip install arb-tool` will work gl
 1. Create a GitHub release with tag `v1.x.y`
 2. Download the auto-generated tarball and get its hash:
    ```bash
-   curl -L https://github.com/miroslavondrousek/Arbitrage-Research-Tool/archive/refs/tags/v1.x.y.tar.gz \
+   curl -L https://github.com/mirekondro/Arbitrage-Research-Tool/archive/refs/tags/v1.x.y.tar.gz \
         -o arb-tool-1.x.y.tar.gz
    shasum -a 256 arb-tool-1.x.y.tar.gz
    ```

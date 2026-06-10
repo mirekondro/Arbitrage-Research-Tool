@@ -2,7 +2,7 @@
 #
 # ── One-time setup ────────────────────────────────────────────────────────────
 #   brew tap miroslavondrousek/arb-tool \
-#       https://github.com/miroslavondrousek/Arbitrage-Research-Tool
+#       https://github.com/mirekondro/Arbitrage-Research-Tool
 #
 # ── Install ───────────────────────────────────────────────────────────────────
 #   brew install --HEAD arb-tool   # latest from the dev branch (works now)
@@ -21,17 +21,16 @@
 
 class ArbTool < Formula
   desc "Terminal UI for real-time cross-platform prediction market arbitrage"
-  homepage "https://github.com/miroslavondrousek/Arbitrage-Research-Tool"
+  homepage "https://github.com/mirekondro/Arbitrage-Research-Tool"
   license "MIT"
 
   # ── Versioned install ──────────────────────────────────────────────────────
-  # Uncomment and fill in after creating the first GitHub release:
-  # url "https://github.com/miroslavondrousek/Arbitrage-Research-Tool/archive/refs/tags/v1.0.0.tar.gz"
-  # sha256 "<output of: shasum -a 256 v1.0.0.tar.gz>"
-  # version "1.0.0"
+  url "https://github.com/mirekondro/Arbitrage-Research-Tool/archive/refs/tags/v1.0.0.tar.gz"
+  sha256 "0019dfc4b32d63c1392aa264aed2253c1e0c2fb09216f8e2cc269bbfb8bb49b5"
+  version "1.0.0"
 
-  # ── HEAD install (no release tag required) ────────────────────────────────
-  head "https://github.com/miroslavondrousek/Arbitrage-Research-Tool.git",
+  # ── HEAD install (latest dev branch) ─────────────────────────────────────
+  head "https://github.com/mirekondro/Arbitrage-Research-Tool.git",
        branch: "dev"
 
   depends_on "python@3.12"
