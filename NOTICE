@@ -1,0 +1,52 @@
+Arbitrage Research Tool
+Copyright 2025 Miroslav Ondrousek
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this software except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+
+-------------------------------------------------------------------------------
+THIRD-PARTY COMPONENTS
+-------------------------------------------------------------------------------
+
+This software incorporates components from the following open-source projects.
+Their licenses are reproduced in full where required by those licenses.
+
+  textual         — MIT License       — Copyright (c) Textualize Ltd
+                    https://github.com/Textualize/textual
+
+  rich            — MIT License       — Copyright (c) Textualize Ltd
+                    https://github.com/Textualize/rich
+
+  httpx           — BSD 3-Clause      — Copyright (c) Encode OSS Ltd
+                    https://github.com/encode/httpx
+
+  rapidfuzz       — MIT License       — Copyright (c) Max Bachmann
+                    https://github.com/maxbachmann/RapidFuzz
+
+  plotext         — MIT License       — Copyright (c) Savino Piccolomo
+                    https://github.com/piccolomo/plotext
+
+  python-dateutil — Apache 2.0 / BSD  — Copyright (c) dateutil contributors
+                    https://github.com/dateutil/dateutil
+
+  pyperclip       — BSD 3-Clause      — Copyright (c) Al Sweigart
+                    https://github.com/asweigart/pyperclip
+
+  tomli           — MIT License       — Copyright (c) Taneli Hukkinen
+                    https://github.com/hukkin/tomli
+
+-------------------------------------------------------------------------------
+PLATFORM TRADEMARKS
+-------------------------------------------------------------------------------
+
+Polymarket, Kalshi, PredictIt, Manifold, and Metaculus are trademarks or
+registered trademarks of their respective owners. This project is not
+affiliated with, endorsed by, or sponsored by any of these companies.
+Their names are used solely to describe the data sources accessed by this tool.

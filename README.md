@@ -351,4 +351,6 @@ After uploading, `pipx install arb-tool` and `pip install arb-tool` will work gl
 
 ## License
 
-MIT
+[Apache License 2.0](LICENSE) — Copyright 2025 Miroslav Ondrousek
+
+See [LEGAL.md](LEGAL.md) for the full legal notice, financial disclaimer, API terms, and third-party attributions.

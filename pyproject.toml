@@ -9,7 +9,7 @@ name = "arb-tool"
 version = "1.0.0"
 description = "Terminal UI for real-time cross-platform prediction market arbitrage"
 readme = "README.md"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 authors = [
     { name = "Miroslav Ondrousek", email = "mirekondro@post.cz" },
 ]
@@ -22,7 +22,7 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Financial and Insurance Industry",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
