@@ -7,174 +7,202 @@ from typing import Optional
 from textual import work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.reactive import reactive
-from textual.widgets import Button, DataTable, Input, Label, Select, Static
+from textual.widgets import Button, Input, Label, Static
 
 from src.models import Market, PricePoint
 
 
 def _ascii_chart(
     series: dict[str, list[tuple[datetime, float]]],
-    width: int = 80,
-    height: int = 18,
+    width: int = 110,
+    height: int = 22,
 ) -> str:
-    """Render a basic ASCII line chart; returns ANSI string."""
     try:
         import plotext as plt
         plt.clf()
         plt.plotsize(width, height)
         plt.theme("dark")
         plt.ylim(0, 1)
-        plt.ylabel("YES Price")
+        plt.ylabel("YES Probability")
+        plt.title("Price History & Spread")
 
-        colors = ["blue", "green", "magenta", "yellow"]
+        palette = ["blue+", "green+", "orange+", "magenta+"]
+        all_times: list[float] = []
+
         for idx, (label, points) in enumerate(series.items()):
-            if not points:
+            if not points or label == "_spread":
                 continue
             xs = [p[0].timestamp() for p in points]
             ys = [p[1] for p in points]
-            # Downsample if too many points
+            all_times.extend(xs)
             if len(xs) > width * 2:
-                step = len(xs) // (width * 2)
-                xs = xs[::step]
-                ys = ys[::step]
-            plt.plot(xs, ys, label=label, color=colors[idx % len(colors)])
+                step = max(1, len(xs) // (width * 2))
+                xs, ys = xs[::step], ys[::step]
+            plt.plot(xs, ys, label=label, color=palette[idx % len(palette)])
 
-        plt.xlabel("Time")
-        plt.date_form("H:M", from_form="timestamp")
+        # Spread overlay (abs difference)
+        if "_spread" in series:
+            sp = series["_spread"]
+            sxs = [p[0].timestamp() for p in sp]
+            sys_ = [p[1] for p in sp]
+            if len(sxs) > width * 2:
+                step = max(1, len(sxs) // (width * 2))
+                sxs, sys_ = sxs[::step], sys_[::step]
+            plt.plot(sxs, sys_, label="spread", color="red")
+
+        if all_times:
+            plt.xlabel("Time →")
         return plt.build()
     except Exception as exc:
         return f"[Chart unavailable: {exc}]"
 
 
-def _edge_stats(
-    series: dict[str, list[tuple[datetime, float]]],
-) -> str:
-    """Compute edge window statistics between the first two series."""
-    names = list(series.keys())
+def _compute_spread(
+    series: dict[str, list[tuple[datetime, float]]]
+) -> list[tuple[datetime, float]]:
+    """Interpolate two series onto a shared timeline and return abs difference."""
+    names = [k for k in series if k != "_spread"]
     if len(names) < 2:
-        return "Need at least two platforms to compute edge stats."
+        return []
 
-    points_a = series[names[0]]
-    points_b = series[names[1]]
-    if not points_a or not points_b:
-        return "Insufficient price history data."
+    pts_a = series[names[0]]
+    pts_b = series[names[1]]
+    if not pts_a or not pts_b:
+        return []
 
-    # Align by common time range
-    start = max(points_a[0][0], points_b[0][0])
-    end   = min(points_a[-1][0], points_b[-1][0])
+    start = max(pts_a[0][0], pts_b[0][0])
+    end   = min(pts_a[-1][0], pts_b[-1][0])
+    if start >= end:
+        return []
 
-    def interp(pts: list[tuple[datetime, float]], ts: datetime) -> float:
+    def interp(pts: list, ts: datetime) -> float:
         for i, (t, p) in enumerate(pts):
             if t >= ts:
                 if i == 0:
                     return p
-                t0, p0 = pts[i - 1]
-                t1, p1 = t, p
-                frac = (ts - t0).total_seconds() / max((t1 - t0).total_seconds(), 1)
-                return p0 + frac * (p1 - p0)
+                t0, p0 = pts[i-1]
+                frac = (ts - t0).total_seconds() / max((t - t0).total_seconds(), 1)
+                return p0 + frac * (p - p0)
         return pts[-1][1]
 
-    if start >= end:
-        return "No overlapping time range between the two platforms."
+    total_sec = (end - start).total_seconds()
+    n = min(200, max(40, int(total_sec / 3600)))
+    result = []
+    for i in range(n):
+        ts = start + timedelta(seconds=i * total_sec / n)
+        result.append((ts, abs(interp(pts_a, ts) - interp(pts_b, ts))))
+    return result
 
-    # Sample spread at regular intervals
-    total_seconds = (end - start).total_seconds()
-    n_samples = min(500, max(50, int(total_seconds / 3600)))
-    dt = total_seconds / n_samples
 
-    spreads: list[tuple[datetime, float]] = []
-    for i in range(n_samples):
-        ts = start + timedelta(seconds=i * dt)
-        pa = interp(points_a, ts)
-        pb = interp(points_b, ts)
-        spreads.append((ts, abs(pa - pb)))
+def _edge_stats(series: dict) -> str:
+    names = [k for k in series if k != "_spread"]
+    if len(names) < 2:
+        return "Load two platforms to see edge stats."
 
-    if not spreads:
-        return "No spread data."
+    spread = series.get("_spread") or _compute_spread({k: series[k] for k in names[:2]})
+    if not spread:
+        return "No overlapping time window."
 
-    max_spread_item = max(spreads, key=lambda x: x[1])
-    avg_spread = sum(s for _, s in spreads) / len(spreads)
+    max_sp = max(spread, key=lambda x: x[1])
+    avg_sp = sum(s for _, s in spread) / len(spread)
 
-    # Edge window = contiguous span where spread > 2%
-    edge_threshold = 0.02
-    edge_spans: list[float] = []
+    edge_thresh = 0.02
+    spans: list[float] = []
     span_start: Optional[datetime] = None
-    for ts, sp in spreads:
-        if sp >= edge_threshold:
+    for ts, sp in spread:
+        if sp >= edge_thresh:
             if span_start is None:
                 span_start = ts
         else:
             if span_start is not None:
-                edge_spans.append((ts - span_start).total_seconds() / 3600)
+                spans.append((ts - span_start).total_seconds() / 3600)
                 span_start = None
     if span_start is not None:
-        edge_spans.append((spreads[-1][0] - span_start).total_seconds() / 3600)
+        spans.append((spread[-1][0] - span_start).total_seconds() / 3600)
 
-    avg_edge_h = sum(edge_spans) / len(edge_spans) if edge_spans else 0
-    max_edge_h = max(edge_spans) if edge_spans else 0
+    avg_h = sum(spans) / len(spans) if spans else 0
+    max_h = max(spans) if spans else 0
 
-    return (
-        f"Platforms: [bold]{names[0]}[/] vs [bold]{names[1]}[/]\n"
-        f"Time range: {start.strftime('%Y-%m-%d %H:%M')} → {end.strftime('%Y-%m-%d %H:%M')}\n"
-        f"Max spread:  [bold yellow]{max_spread_item[1]*100:.1f}%[/]  at {max_spread_item[0].strftime('%Y-%m-%d %H:%M')}\n"
-        f"Avg spread:  {avg_spread*100:.1f}%\n"
-        f"Edge windows (>{edge_threshold*100:.0f}% spread): {len(edge_spans)}"
-        f"  |  Avg duration: {avg_edge_h:.1f}h  |  Max: {max_edge_h:.1f}h"
-    )
+    lines = [
+        f"  Platforms:   [bold]{names[0]}[/]  vs  [bold]{names[1]}[/]",
+        f"  Peak spread: [bold yellow]{max_sp[1]*100:.1f}%[/]  @ {max_sp[0].strftime('%b %d %H:%M')}",
+        f"  Avg spread:  {avg_sp*100:.1f}%",
+        f"  Edge windows (>{edge_thresh*100:.0f}% spread): [bold]{len(spans)}[/]"
+        f"  │  Avg duration: {avg_h:.1f}h  │  Longest: {max_h:.1f}h",
+    ]
+    if not spans:
+        lines.append("  [dim]No significant edge windows in this period.[/]")
+    return "\n".join(lines)
 
 
 class EdgeTab(Vertical):
     DEFAULT_CSS = """
     EdgeTab { height: 1fr; }
+
     #edge-controls {
         height: 3;
-        background: $panel-darken-1;
+        background: #161b22;
+        border-bottom: solid #21262d;
         padding: 0 1;
         align: left middle;
     }
-    #edge-controls Label { width: auto; padding: 0 1; }
-    #market-search { width: 40; }
-    #days-input { width: 6; }
-    #edge-run-btn { width: 12; margin: 0 1; }
+    #edge-controls Label { width: auto; padding: 0 1; color: #8b949e; }
+    #market-search { width: 38; }
+    #days-input    { width: 6; }
+    #edge-run-btn  { width: 12; margin: 0 1; }
+
     #edge-status {
         height: 1;
-        background: $panel;
-        color: $text-muted;
+        background: #0d1117;
+        color: #8b949e;
         padding: 0 1;
+        border-bottom: solid #21262d;
     }
+
     #edge-chart {
         height: 1fr;
         padding: 1;
-        overflow-y: auto;
-        background: $surface;
+        overflow: auto;
+        background: #0d1117;
     }
+
     #edge-stats {
-        height: 8;
-        background: $panel-darken-2;
-        border-top: solid $accent;
-        padding: 1;
+        height: 7;
+        background: #161b22;
+        border-top: solid #30363d;
+        padding: 1 2;
     }
     """
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="edge-controls"):
-            yield Label("Market title contains:")
-            yield Input(placeholder="e.g. Trump 2024", id="market-search")
-            yield Label("Days back:")
-            yield Input(value="30", id="days-input")
+            yield Label("Market keyword:")
+            yield Input(placeholder="e.g. Trump election", id="market-search")
+            yield Label("Days:")
+            yield Input(value="14", id="days-input")
             yield Button("⟳ Load", id="edge-run-btn", variant="primary")
-        yield Static("Enter a market keyword and click Load.", id="edge-status")
+        yield Static("Enter a keyword and click Load — or press E on an arb row.", id="edge-status")
         yield Static("", id="edge-chart", markup=False)
         yield Static("", id="edge-stats")
+
+    # Called programmatically from ArbTab via the app
+    def set_keyword(self, keyword: str) -> None:
+        try:
+            inp = self.query_one("#market-search", Input)
+            inp.value = keyword
+            days_str = self.query_one("#days-input", Input).value
+            days = int(days_str) if days_str.isdigit() else 14
+            self.load_edge(keyword, days)
+        except Exception:
+            pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "edge-run-btn":
             keyword = self.query_one("#market-search", Input).value.strip()
             try:
-                days = int(self.query_one("#days-input", Input).value or "30")
+                days = int(self.query_one("#days-input", Input).value or "14")
             except ValueError:
-                days = 30
+                days = 14
             self.load_edge(keyword, days)
 
     @work(exclusive=True, thread=False)
@@ -185,31 +213,34 @@ class EdgeTab(Vertical):
         chart  = self.query_one("#edge-chart",  Static)
         stats  = self.query_one("#edge-stats",  Static)
 
-        status.update(f"Fetching markets matching '{keyword}'…")
+        status.update(f"Searching for '{keyword}' on Polymarket & Manifold…")
         chart.update("")
         stats.update("")
 
         try:
-            poly_markets, mani_markets = await asyncio.gather(
+            poly_mkts, mani_mkts = await asyncio.gather(
                 polymarket.fetch_markets(300),
                 manifold.fetch_markets(300),
             )
 
             kw = keyword.lower()
-            poly_match = next((m for m in poly_markets if kw in m.title.lower()), None)
-            mani_match = next((m for m in mani_markets if kw in m.title.lower()), None)
+            poly_match = next((m for m in poly_mkts if kw in m.title.lower()), None)
+            mani_match = next((m for m in mani_mkts if kw in m.title.lower()), None)
 
             if not poly_match and not mani_match:
-                status.update(f"No markets found matching '{keyword}'. Try a different keyword.")
+                status.update(
+                    f"[yellow]No markets found for '{keyword}'.[/] "
+                    f"Try a shorter keyword (e.g. 'NBA', 'Trump', 'Bitcoin')."
+                )
                 return
 
-            now_ts    = int(datetime.now().timestamp())
-            start_ts  = now_ts - days * 86_400
+            now_ts   = int(datetime.now().timestamp())
+            start_ts = now_ts - min(days, 14) * 86_400
 
             series: dict[str, list[tuple[datetime, float]]] = {}
 
             if poly_match and poly_match.condition_id:
-                status.update(f"Fetching Polymarket history for: {poly_match.title[:60]}…")
+                status.update(f"Loading Polymarket history: {poly_match.title[:60]}…")
                 pts = await polymarket.fetch_price_history(
                     poly_match.condition_id, start_ts, now_ts, interval="6h"
                 )
@@ -217,7 +248,7 @@ class EdgeTab(Vertical):
                     series["polymarket"] = [(p.timestamp, p.price) for p in pts]
 
             if mani_match:
-                status.update(f"Fetching Manifold history for: {mani_match.title[:60]}…")
+                status.update(f"Loading Manifold history: {mani_match.title[:60]}…")
                 pts = await manifold.fetch_price_history(mani_match.id)
                 cutoff = datetime.now() - timedelta(days=days)
                 filtered = [(p.timestamp, p.price) for p in pts if p.timestamp >= cutoff]
@@ -225,24 +256,30 @@ class EdgeTab(Vertical):
                     series["manifold"] = filtered
 
             if not series:
-                status.update("Price history unavailable for the matched markets.")
+                status.update("[yellow]Price history unavailable — market may be too new.[/]")
                 return
 
-            labels = list(series.keys())
-            status.update(
-                f"Showing {days}d price history"
-                f"{'  |  POLY: ' + poly_match.title[:40] if poly_match else ''}"
-                f"{'  |  MANI: ' + mani_match.title[:40] if mani_match else ''}"
-            )
+            # Compute spread line
+            if len(series) >= 2:
+                series["_spread"] = _compute_spread(series)
 
+            # Header
+            parts = []
+            if poly_match:
+                parts.append(f"POLY: {poly_match.title[:38]}")
+            if mani_match:
+                parts.append(f"MANI: {mani_match.title[:38]}")
+            status.update(f"[dim]{days}d[/]  " + "  │  ".join(parts))
+
+            # Chart
             try:
                 from rich.text import Text
-                raw = _ascii_chart(series, width=100, height=20)
+                raw = _ascii_chart(series)
                 chart.update(Text.from_ansi(raw))
             except Exception:
-                chart.update("[Chart render failed — plotext may not be installed]")
+                chart.update("[dim]Chart render failed — install plotext[/]")
 
             stats.update(_edge_stats(series))
 
         except Exception as exc:
-            status.update(f"Error: {exc}")
+            status.update(f"[red]Error: {exc}[/]")
