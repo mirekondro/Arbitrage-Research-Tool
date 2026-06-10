@@ -21,14 +21,13 @@ A terminal UI for finding price discrepancies across prediction markets — real
 ## Quick install
 
 ```bash
-# Recommended — isolated environment, auto-updates
+# Homebrew — one command, no tap needed (macOS / Linux)
+brew install mirekondro/arb-tool/arb-tool
+
+# pipx — recommended for Python users, isolated environment
 pipx install arb-tool
 
-# Homebrew (macOS / Linux)
-brew tap mirekondro/arb-tool https://github.com/mirekondro/Arbitrage-Research-Tool
-brew install --HEAD arb-tool   # until a versioned release tag exists
-
-# Plain pip (into current environment)
+# Plain pip
 pip install arb-tool
 ```
 
@@ -37,7 +36,52 @@ Then just run:
 arb-tool
 ```
 
-> **Why pipx?**  pipx installs Python CLI tools in their own isolated virtualenv so they never conflict with other packages.  It's the recommended way to install command-line Python apps.
+---
+
+## Getting started
+
+### 1. Launch the app
+```bash
+arb-tool
+```
+The app opens in your terminal and immediately starts fetching markets from all five platforms. The top bar shows a live spinner (`⟳`) for each platform — wait a few seconds until they show a count (`12 ✓`) or a dash (`─` = no data).
+
+### 2. Read the table
+Each row is a potential arbitrage opportunity — a pair of markets on two different platforms where buying YES on one and NO on the other costs less than $1 total, guaranteeing a profit.
+
+| Column | What to look at |
+|--------|----------------|
+| `Tier` | ●●● = high profit, · = marginal |
+| `Event` | The matched market title (★ = real money) |
+| `YES on` / `NO on` | Which platform to trade each leg on |
+| `Profit%` | Guaranteed edge after fees |
+| `Match%` | How confident the title match is — below 80% shows ⚠ |
+| `Closes` | Red = closing soon, act fast |
+| `Age` | How long this opportunity has been visible |
+
+### 3. Investigate a row
+Press `↑` / `↓` to select a row. A detail panel opens at the bottom showing:
+- Both market titles side by side (verify they're actually the same event)
+- Exact prices on each platform
+- Bet-sizing calculator: how much to put on each leg for $100 / $1K / $10K
+- Maximum deployable capital based on available liquidity
+
+### 4. Act on an opportunity
+- Press **`o`** to open both market URLs in your browser
+- Press **`c`** to copy a trade memo to your clipboard
+- Press **`n`** to search recent news about the topic
+
+### 5. Filter and focus
+- Click a **category tab** (Sports / Politics / World / Crypto / Finance / Science) to narrow the list
+- Type in the **Filter** box to search by keyword
+- Toggle **Real$** to show only real-money opportunities (Polymarket, Kalshi, PredictIt)
+- Press **`s`** to cycle sort order: Profit% → Liquidity → Close Date
+
+### 6. Watch markets
+Press **`w`** on any row to add it to your watchlist. A 📌 badge appears and the count shows in the status bar. Watched markets persist across restarts (`~/.arb_tool/watchlist.json`).
+
+### 7. Press `?` for help
+Full keyboard reference is one keypress away inside the app.
 
 ---
 
@@ -68,15 +112,12 @@ Upgrades: `pipx upgrade arb-tool`
 ### Option 2 — Homebrew (macOS / Linux)
 
 ```bash
-# Add the custom tap (one-time)
-brew tap mirekondro/arb-tool \
-    https://github.com/mirekondro/Arbitrage-Research-Tool
-
-# Install (HEAD = latest dev branch; drop --HEAD once v1.0.0 tag exists)
-brew install --HEAD arb-tool
+brew install mirekondro/arb-tool/arb-tool
 ```
 
-Upgrades: `brew reinstall --HEAD arb-tool`
+Homebrew auto-taps the formula repo on first install — no separate `brew tap` needed.
+
+Upgrades: `brew upgrade arb-tool`
 
 A default config is installed to `$(brew --prefix)/etc/arb-tool/config.toml.default`. Copy it to `~/.arb_tool/config.toml` to customise.
 
