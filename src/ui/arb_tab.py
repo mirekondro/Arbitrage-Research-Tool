@@ -93,23 +93,40 @@ _CATEGORY_KEYWORDS: dict[str, set[str]] = {
         "tariff", "trade deficit", "sanctions",
         # Housing
         "mortgage rate", "housing market", "home price",
-        # Companies
+        # Companies (tech/finance — note: spacex moved to Science)
         "openai", "anthropic", "apple", "microsoft", "meta ", "google",
-        "amazon", "nvidia", "tesla", "spacex", "stripe", "palantir",
+        "amazon", "nvidia", "tesla", "stripe", "palantir",
     },
     "cat-science": {
-        # AI / tech
-        "artificial intelligence", " ai ", "machine learning", "llm",
-        "gpt", "claude", "gemini", "agi", "superintelligence",
-        "autopilot", "self-driving", "autonomous", "robot",
+        # AI / ML — multiple variants so titles *starting* with "AI" also match
+        "ai ",                   # "AI model…", "AI surpasses…"
+        " ai",                   # "…will ai…"
+        "artificial intelligence",
+        "machine learning", "deep learning", "neural network",
+        "large language model", "llm", "language model",
+        "gpt", "claude ai", "gemini ai", "agi", "superintelligence",
+        "autopilot", "self-driving", "autonomous vehicle", "robotics",
+        # Space
+        "spacex", "space ", "mars ", " mars", "moon landing", "lunar",
+        "nasa", "rocket launch", "starship", "asteroid", "exoplanet",
+        "telescope", "james webb", "jwst", "hubble", "iss", "orbit",
+        "satellite launch",
         # Climate / energy
-        "climate", "carbon", "co2", "global warming", "renewable",
-        "solar", "wind power", "nuclear energy", "fusion",
-        "paris agreement", "cop ", "emissions",
-        # Science / medicine
-        "vaccine", "pandemic", "cancer", "alzheimer", "gene editing",
-        "crispr", "longevity", "space", "mars", "moon", "nasa",
-        "spacex launch", "asteroid", "exoplanet",
+        "climate", "carbon", "co2", "global warming", "renewable energy",
+        "solar power", "wind power", "nuclear energy", "fusion power",
+        "paris agreement", "cop ", "net zero", "emissions target",
+        # Biology / medicine / public health
+        "vaccine", "vaccination", "pandemic", "epidemic", "virus",
+        "cancer cure", "alzheimer", "gene editing", "crispr",
+        "longevity", "fda approval", "fda approved", "clinical trial",
+        "mrna", "drug approved", "gene therapy",
+        # Physics / quantum
+        "quantum computer", "quantum computing", "superconductor",
+        "particle physics", "nuclear fusion",
+        # Tech / computing
+        "semiconductor", "computer chip", "microchip",
+        # Disaster / nature (catches events Metaculus tracks)
+        "earthquake", "hurricane", "volcano",
     },
 }
 

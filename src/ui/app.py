@@ -6,13 +6,14 @@ from textual.widgets import Footer, Header, Static, TabbedContent, TabPane
 from src.ui.arb_tab      import ArbTab, EdgeRequest
 from src.ui.edge_tab     import EdgeTab
 from src.ui.backtest_tab import BacktestTab
+from src.ui.crypto_tab   import CryptoTab
 
 
 HELP_TEXT = """\
 [bold cyan]ON-CHAIN ARBITRAGE RESEARCH TOOL — KEYBOARD REFERENCE[/]
 
 [bold]── Navigation ──────────────────────────────────────────[/]
-  [yellow]1[/]  /  [yellow]2[/]  /  [yellow]3[/]    Switch tabs  (Arb Scanner / Edge Window / Backtest)
+  [yellow]1[/]  /  [yellow]2[/]  /  [yellow]3[/]  /  [yellow]4[/]    Switch tabs  (Arb Scanner / Edge Window / Backtest / Crypto Arb)
   [yellow]↑ ↓[/]             Navigate rows in the table
   [yellow]/[/]               Focus the filter input
 
@@ -63,6 +64,13 @@ HELP_TEXT = """\
   [bold #ffa657]PI  [/]   PredictIt    (real money, 10 % profit fee)
   [bold #00b4d8]MCTL[/]   Metaculus    (forecasting / play money)
 
+[bold]── Crypto Exchange Arb (Tab 4) ──────────────────────────[/]
+  Live price spread across Binance / Coinbase / Kraken
+  [yellow]r[/]               Refresh exchange prices now
+  [yellow]o[/]               Open buy-side exchange in browser
+  Spreads ≥ 0.1 % flagged; ●●● tier = > 1 %
+  [dim]⚠  Theoretical only — fees and slippage will reduce real profit[/]
+
 [bold]── Other ────────────────────────────────────────────────[/]
   [yellow]?[/]               Show this help screen
   [yellow]q[/]               Quit
@@ -103,7 +111,7 @@ class HelpScreen(ModalScreen):
 
 class ArbitrageApp(App):
     TITLE = "On-Chain Arbitrage Research Tool"
-    SUB_TITLE = "Polymarket · Kalshi · Manifold · PredictIt"
+    SUB_TITLE = "Polymarket · Kalshi · Manifold · PredictIt · Binance · Coinbase · Kraken"
 
     CSS = """
     /* ── Global ─────────────────────────────────────────────────────────── */
@@ -183,7 +191,8 @@ class ArbitrageApp(App):
         Binding("question_mark", "show_help",         "Help",        show=True),
         Binding("1",             "show_tab('arb')",   "Arb",         show=False),
         Binding("2",             "show_tab('edge')",  "Edge",        show=False),
-        Binding("3",             "show_tab('back')",  "Backtest",    show=False),
+        Binding("3",             "show_tab('back')",   "Backtest",    show=False),
+        Binding("4",             "show_tab('crypto')", "Crypto",      show=False),
         Binding("ctrl+r",        "refresh_arb",       "Refresh",     show=False),
         Binding("slash",         "focus_filter",      "Filter",      show=False),
         Binding("x",             "export_csv",        "Export CSV",  show=False),
@@ -201,6 +210,8 @@ class ArbitrageApp(App):
                 yield EdgeTab()
             with TabPane("🔁 Wallet Backtest", id="back"):
                 yield BacktestTab()
+            with TabPane("₿ Crypto Exchange Arb", id="crypto"):
+                yield CryptoTab()
         yield Footer()
 
     # ── Cross-tab message handler ─────────────────────────────────────────────
